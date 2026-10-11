@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { LessThan, MoreThan, Not } from 'typeorm';
 import { TimeEntriesService } from './time-entries.service';
 import { TimeEntryEntity } from './time-entry.entity';
 import { ProjectEntity } from '../projects/project.entity';
@@ -96,6 +97,74 @@ describe('TimeEntriesService', () => {
 
       expect(repo.save).toHaveBeenCalled();
       expect(projectCategoryRepo.findOne).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('overlap', () => {
+    const expectOverlapError = async (promise: Promise<unknown>) => {
+      const err = await promise.catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(AppBadRequestException);
+      expect((err as AppBadRequestException).getResponse()).toMatchObject({
+        code: 'TIME_ENTRY_OVERLAP',
+      });
+    };
+
+    const baseData = {
+      projectId: 'project-1',
+      creatorId: 'user-1',
+      startAt: new Date('2026-01-01T07:00:00Z'),
+      endAt: new Date('2026-01-01T09:00:00Z'),
+    };
+
+    it('rejects a new entry that overlaps an existing one of the same user', async () => {
+      projectRepo.findOne.mockResolvedValue({ id: 'project-1' });
+      repo.findOne.mockResolvedValueOnce({ id: 'existing' });
+
+      await expectOverlapError(service.create(baseData));
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+
+    it('queries overlap per user with exclusive bounds (adjacent entries allowed)', async () => {
+      projectRepo.findOne.mockResolvedValue({ id: 'project-1' });
+      repo.findOne.mockResolvedValueOnce(null);
+
+      await service.create(baseData);
+
+      const { where } = repo.findOne.mock.calls[0][0];
+      expect(where.creatorId).toBe('user-1');
+      expect(where.startAt).toEqual(LessThan(baseData.endAt));
+      expect(where.endAt).toEqual(MoreThan(baseData.startAt));
+      expect(where.id).toBeUndefined();
+      expect(repo.save).toHaveBeenCalled();
+    });
+
+    it('ignores the entry itself when updating', async () => {
+      repo.findOne
+        .mockResolvedValueOnce({
+          id: 'entry-1',
+          projectId: 'project-1',
+          creatorId: 'user-1',
+          categoryId: null,
+          startAt: baseData.startAt,
+          endAt: baseData.endAt,
+        })
+        .mockResolvedValueOnce(null);
+
+      await service.update('entry-1', {
+        endAt: new Date('2026-01-01T09:30:00Z'),
+      });
+
+      const { where } = repo.findOne.mock.calls[1][0];
+      expect(where.id).toEqual(Not('entry-1'));
+      expect(repo.save).toHaveBeenCalled();
+    });
+
+    it('maps a DB exclusion violation (concurrent requests) to TIME_ENTRY_OVERLAP', async () => {
+      projectRepo.findOne.mockResolvedValue({ id: 'project-1' });
+      repo.findOne.mockResolvedValueOnce(null);
+      repo.save.mockRejectedValueOnce({ driverError: { code: '23P01' } });
+
+      await expectOverlapError(service.create(baseData));
     });
   });
 

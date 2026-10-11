@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DeepPartial, Repository } from 'typeorm';
+import { DeepPartial, LessThan, MoreThan, Not, Repository } from 'typeorm';
 import { TimeEntryEntity } from './time-entry.entity';
 import { ProjectEntity } from '../projects/project.entity';
 import { ProjectCategoryEntity } from '../project-categories/project-category.entity';
@@ -186,6 +186,57 @@ export class TimeEntriesService {
     }
   }
 
+  /**
+   * Verhindert, dass dieselbe Person einen Zeitraum doppelt verbucht - auch
+   * nicht auf verschiedenen Projekten (man kann nicht an zwei Orten
+   * gleichzeitig arbeiten). Aneinandergrenzende Einträge (07:00-09:00 und
+   * 09:00-11:00) sind erlaubt. Die DB-Constraint time_entries_no_overlap
+   * (migrations/003) fängt zusätzlich gleichzeitige Requests ab.
+   * @param excludeId - beim Bearbeiten: der Eintrag selbst zählt nicht
+   */
+  private async assertNoOverlap(
+    creatorId: string,
+    startAt: Date,
+    endAt: Date,
+    excludeId?: string,
+  ): Promise<void> {
+    const overlapping = await this.repo.findOne({
+      where: {
+        creatorId,
+        startAt: LessThan(endAt),
+        endAt: MoreThan(startAt),
+        ...(excludeId ? { id: Not(excludeId) } : {}),
+      },
+    });
+    if (overlapping) {
+      throw this.overlapException();
+    }
+  }
+
+  private overlapException(): AppBadRequestException {
+    return new AppBadRequestException(
+      ErrorCode.TIME_ENTRY_OVERLAP,
+      'Für diesen Zeitraum ist bereits ein Zeiteintrag erfasst',
+    );
+  }
+
+  /**
+   * Speichert und übersetzt eine Verletzung der Overlap-Constraint (Postgres
+   * 23P01, nur bei gleichzeitigen Requests möglich) in denselben Fehler wie
+   * assertNoOverlap.
+   */
+  private async saveChecked(entry: TimeEntryEntity): Promise<TimeEntryEntity> {
+    try {
+      return await this.repo.save(entry);
+    } catch (err) {
+      const e = err as { code?: string; driverError?: { code?: string } };
+      if (e.code === '23P01' || e.driverError?.code === '23P01') {
+        throw this.overlapException();
+      }
+      throw err;
+    }
+  }
+
   async create(data: {
     projectId: string;
     categoryId?: string | null;
@@ -210,9 +261,10 @@ export class TimeEntriesService {
       data.endAt,
       data.categoryId,
     );
+    await this.assertNoOverlap(data.creatorId, data.startAt, data.endAt);
 
     const entry = this.repo.create(data as DeepPartial<TimeEntryEntity>);
-    return this.repo.save(entry);
+    return this.saveChecked(entry);
   }
 
   async update(
@@ -243,11 +295,17 @@ export class TimeEntriesService {
       nextEndAt,
       nextCategoryId,
     );
+    await this.assertNoOverlap(
+      entry.creatorId,
+      nextStartAt,
+      nextEndAt,
+      entry.id,
+    );
 
     entry.startAt = nextStartAt;
     entry.endAt = nextEndAt;
     entry.categoryId = nextCategoryId;
-    return this.repo.save(entry);
+    return this.saveChecked(entry);
   }
 
   async delete(id: string): Promise<void> {
