@@ -96,4 +96,18 @@ describe('NotesService', () => {
       ).rejects.toThrow(AppNotFoundException);
     });
   });
+  describe('create', () => {
+    it('returns the new note with an empty photos array', async () => {
+      const note = await service.create({
+        organizationId: 'org-1',
+        customerId: 'customer-1',
+        authorId: 'user-1',
+        text: 'Schlüssel beim Nachbarn',
+      });
+
+      expect(note.photos).toEqual([]);
+      expect(note.customerId).toBe('customer-1');
+      expect(note.projectId).toBeNull();
+    });
+  });
 });

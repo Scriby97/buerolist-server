@@ -97,7 +97,11 @@ export class NotesService {
       authorId: data.authorId,
       text: data.text,
     });
-    return this.repo.save(note);
+    const saved = await this.repo.save(note);
+    // Eine neue Notiz hat noch keine Fotos - explizit mitliefern, damit der
+    // Client dieselbe Form wie bei findAll bekommt (photos immer ein Array).
+    saved.photos = [];
+    return saved;
   }
 
   async addPhoto(
