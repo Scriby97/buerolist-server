@@ -25,6 +25,7 @@ import {
   decodeTimeEntryCursor,
   parseOptionalLimit,
 } from './time-entry-cursor.util';
+import { parseOptionalDateRange } from '../common/utils/date-range.util';
 
 @Controller('time-entries')
 export class TimeEntriesController {
@@ -96,6 +97,8 @@ export class TimeEntriesController {
    * Cursor-paginiert (neueste zuerst), optional ?projectId=... für die
    * Zeit-Zusammenfassung eines einzelnen Projekts. Admin/Owner sehen alle
    * Einträge ihrer Organisation, Mitarbeiter nur ihre eigenen.
+   * Optional ?startDate=...&endDate=... (ISO-Datetime, nur zusammen) fuer die
+   * Kalenderansicht - filtert nach startAt, typischerweise ohne limit.
    */
   @Get()
   async getAll(
@@ -104,9 +107,15 @@ export class TimeEntriesController {
     @Query('projectId') projectId?: string,
     @Query('limit') limitParam?: string,
     @Query('cursor') cursorParam?: string,
+    @Query('startDate') startDateParam?: string,
+    @Query('endDate') endDateParam?: string,
   ) {
     const organizationIds = await this.resolveOrganizationIds(user, queryOrgId);
     const creatorId = await this.resolveCreatorIdFilter(user, organizationIds);
+    const { startDate, endDate } = parseOptionalDateRange(
+      startDateParam,
+      endDateParam,
+    );
     const limit = parseOptionalLimit(limitParam);
     const cursor = cursorParam ? decodeTimeEntryCursor(cursorParam) : undefined;
     return this.timeEntriesService.findAllWithProject(
@@ -115,6 +124,8 @@ export class TimeEntriesController {
       projectId,
       limit,
       cursor,
+      startDate,
+      endDate,
     );
   }
 

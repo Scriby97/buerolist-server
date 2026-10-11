@@ -56,6 +56,8 @@ export class TimeEntriesService {
    *   die eigenen Einträge einschränken
    * @param projectId - optional: nur Einträge eines bestimmten Projekts
    *   (für die Projekt-Detailansicht / Zeit-Zusammenfassung)
+   * @param startDate/endDate - optional, beide zusammen: nur Einträge mit
+   *   startAt in diesem Zeitraum (Kalenderansicht)
    */
   async findAllWithProject(
     organizationIds?: string[],
@@ -63,6 +65,8 @@ export class TimeEntriesService {
     projectId?: string,
     limit?: number,
     cursor?: TimeEntryCursor,
+    startDate?: Date,
+    endDate?: Date,
   ): Promise<{
     timeEntries: TimeEntryWithProject[];
     nextCursor: string | null;
@@ -90,6 +94,12 @@ export class TimeEntriesService {
     }
     if (projectId) {
       qb.andWhere('t.projectId = :projectId', { projectId });
+    }
+    if (startDate && endDate) {
+      qb.andWhere('t.startAt >= :startDate AND t.startAt <= :endDate', {
+        startDate,
+        endDate,
+      });
     }
     if (cursor) {
       qb.andWhere(
