@@ -4,6 +4,7 @@ import { IsNull, Not, Repository } from 'typeorm';
 import { OrganizationSubscriptionEntity } from './organization-subscription.entity';
 import { OrganizationMembersService } from './organization-members.service';
 import { ProjectEntity } from '../projects/project.entity';
+import { CustomerEntity } from '../customers/customer.entity';
 import { ProjectStatus } from '../projects/project-status.enum';
 import { AppNotFoundException, ErrorCode } from '../common/exceptions';
 import {
@@ -19,6 +20,7 @@ export interface FreeLimitStatus {
   overLimit: boolean;
   projectCount: number;
   memberCount: number;
+  customerCount: number;
 }
 
 @Injectable()
@@ -30,6 +32,8 @@ export class OrganizationSubscriptionsService {
     private readonly subscriptionRepository: Repository<OrganizationSubscriptionEntity>,
     @InjectRepository(ProjectEntity)
     private readonly projectRepository: Repository<ProjectEntity>,
+    @InjectRepository(CustomerEntity)
+    private readonly customerRepository: Repository<CustomerEntity>,
     private readonly membersService: OrganizationMembersService,
   ) {}
 
@@ -247,7 +251,7 @@ export class OrganizationSubscriptionsService {
   async getFreeLimitStatus(organizationId: string): Promise<FreeLimitStatus> {
     const freeLimits = SUBSCRIPTION_LIMITS[SubscriptionTier.FREE];
 
-    const [projectCount, memberCount] = await Promise.all([
+    const [projectCount, memberCount, customerCount] = await Promise.all([
       this.projectRepository.count({
         where: {
           organizationId,
@@ -256,13 +260,16 @@ export class OrganizationSubscriptionsService {
         },
       }),
       this.membersService.countByOrganization(organizationId),
+      this.customerRepository.count({ where: { organizationId } }),
     ]);
 
     const overLimit =
       (freeLimits.maxProjects !== null &&
         projectCount > freeLimits.maxProjects) ||
-      (freeLimits.maxMembers !== null && memberCount > freeLimits.maxMembers);
+      (freeLimits.maxMembers !== null && memberCount > freeLimits.maxMembers) ||
+      (freeLimits.maxCustomers !== null &&
+        customerCount > freeLimits.maxCustomers);
 
-    return { overLimit, projectCount, memberCount };
+    return { overLimit, projectCount, memberCount, customerCount };
   }
 }

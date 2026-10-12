@@ -5,6 +5,7 @@ import { OrganizationSubscriptionsService } from './organization-subscriptions.s
 import { OrganizationSubscriptionEntity } from './organization-subscription.entity';
 import { OrganizationMembersService } from './organization-members.service';
 import { ProjectEntity } from '../projects/project.entity';
+import { CustomerEntity } from '../customers/customer.entity';
 import { ProjectStatus } from '../projects/project-status.enum';
 import {
   SubscriptionTier,
@@ -21,6 +22,9 @@ describe('OrganizationSubscriptionsService', () => {
   const projectRepository = {
     count: jest.fn(),
     update: jest.fn(),
+  };
+  const customerRepository = {
+    count: jest.fn().mockResolvedValue(0),
   };
   const membersService = {
     countByOrganization: jest.fn(),
@@ -41,6 +45,10 @@ describe('OrganizationSubscriptionsService', () => {
         {
           provide: getRepositoryToken(ProjectEntity),
           useValue: projectRepository,
+        },
+        {
+          provide: getRepositoryToken(CustomerEntity),
+          useValue: customerRepository,
         },
         { provide: OrganizationMembersService, useValue: membersService },
       ],
@@ -78,7 +86,7 @@ describe('OrganizationSubscriptionsService', () => {
 
     it('archives members (except owner) and projects when over the free-tier limit', async () => {
       subscriptionRepository.findOne.mockResolvedValue({ ...baseSubscription });
-      projectRepository.count.mockResolvedValue(5); // > maxProjects (1)
+      projectRepository.count.mockResolvedValue(9); // > maxProjects (8)
       membersService.countByOrganization.mockResolvedValue(1);
 
       await service.downgradeToFree('org-1');
@@ -89,6 +97,19 @@ describe('OrganizationSubscriptionsService', () => {
       expect(projectRepository.update).toHaveBeenCalledWith(
         { organizationId: 'org-1', archivedAt: IsNull() },
         { archivedAt: expect.any(Date) },
+      );
+    });
+
+    it('treats more customers than the free-tier limit as over the limit', async () => {
+      subscriptionRepository.findOne.mockResolvedValue({ ...baseSubscription });
+      projectRepository.count.mockResolvedValue(1);
+      membersService.countByOrganization.mockResolvedValue(1);
+      customerRepository.count.mockResolvedValueOnce(9); // > maxCustomers (8)
+
+      await service.downgradeToFree('org-1');
+
+      expect(membersService.archiveMembersExceptOwner).toHaveBeenCalledWith(
+        'org-1',
       );
     });
 

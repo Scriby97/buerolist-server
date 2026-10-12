@@ -13,6 +13,7 @@ import { OrganizationSubscriptionEntity } from './organization-subscription.enti
 import { OrganizationInviteEntity } from './entities/organization-invite.entity';
 import { UserProfileEntity } from '../auth/entities/user-profile.entity';
 import { ProjectEntity } from '../projects/project.entity';
+import { CustomerEntity } from '../customers/customer.entity';
 import { AuthModule } from '../auth/auth.module';
 import { OrganizationGuard } from '../auth/guards/organization.guard';
 import { OrganizationRolesGuard } from '../auth/guards/organization-roles.guard';
@@ -31,6 +32,8 @@ import { BillingModule } from '../billing/billing.module';
       // voller Projects-Feature-Import noetig, ProjectsService/-Controller
       // bleiben in AppModule.
       ProjectEntity,
+      // Ebenso nur fuer die Kunden-Anzahl beim Free-Limit-Check.
+      CustomerEntity,
     ]),
     AuthModule,
     forwardRef(() => BillingModule),

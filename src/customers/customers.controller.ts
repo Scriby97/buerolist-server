@@ -15,6 +15,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
 import { UserRole, OrganizationRole } from '../auth/enums/user-role.enum';
 import { OrganizationMembersService } from '../organizations/organization-members.service';
+import { OrganizationSubscriptionsService } from '../organizations/organization-subscriptions.service';
 import {
   AppBadRequestException,
   AppForbiddenException,
@@ -27,7 +28,31 @@ export class CustomersController {
   constructor(
     private readonly customersService: CustomersService,
     private readonly membersService: OrganizationMembersService,
+    private readonly subscriptionsService: OrganizationSubscriptionsService,
   ) {}
+
+  /**
+   * Stellt sicher, dass das maxCustomers-Limit des aktuellen Tarifs noch nicht
+   * erreicht ist (analog zum Projekt-Limit in ProjectsController).
+   */
+  private async assertCustomerLimitNotExceeded(
+    organizationId: string,
+  ): Promise<void> {
+    const limits = await this.subscriptionsService.getLimits(organizationId);
+    if (limits.maxCustomers === null) {
+      return;
+    }
+
+    const currentCount =
+      await this.customersService.countByOrganization(organizationId);
+    if (currentCount >= limits.maxCustomers) {
+      throw new AppForbiddenException(
+        ErrorCode.CUSTOMER_LIMIT_REACHED,
+        `Das Kunden-Limit von ${limits.maxCustomers} für den aktuellen Tarif ist erreicht. Bitte upgraden Sie das Abonnement, um weitere Kunden zu erfassen.`,
+        { limit: limits.maxCustomers },
+      );
+    }
+  }
 
   private async resolveOrganizationIds(
     user: AuthUser,
@@ -179,6 +204,7 @@ export class CustomersController {
       user,
       dto.organizationId,
     );
+    await this.assertCustomerLimitNotExceeded(orgId);
     return this.customersService.create({
       name: dto.name,
       contactEmail: dto.contactEmail,

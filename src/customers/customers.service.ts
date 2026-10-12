@@ -73,6 +73,10 @@ export class CustomersService {
     return { customer, projects, notes };
   }
 
+  async countByOrganization(organizationId: string): Promise<number> {
+    return this.repo.count({ where: { organizationId } });
+  }
+
   async create(data: {
     name: string;
     contactEmail?: string;
