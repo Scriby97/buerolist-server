@@ -168,6 +168,59 @@ describe('TimeEntriesService', () => {
     });
   });
 
+  describe('comment', () => {
+    it('saves a trimmed comment and stores empty comments as null', async () => {
+      projectRepo.findOne.mockResolvedValue({ id: 'project-1' });
+      repo.findOne.mockResolvedValue(null);
+      const base = {
+        projectId: 'project-1',
+        creatorId: 'user-1',
+        startAt: new Date('2026-02-01T08:00:00Z'),
+        endAt: new Date('2026-02-01T10:00:00Z'),
+      };
+
+      await service.create({ ...base, comment: '  Material abgeholt  ' });
+      expect(repo.save).toHaveBeenLastCalledWith(
+        expect.objectContaining({ comment: 'Material abgeholt' }),
+      );
+
+      await service.create({ ...base, comment: '   ' });
+      expect(repo.save).toHaveBeenLastCalledWith(
+        expect.objectContaining({ comment: null }),
+      );
+    });
+
+    it('keeps the comment on update when it is not sent, clears it with an empty string', async () => {
+      const existing = () => ({
+        id: 'entry-1',
+        projectId: 'project-1',
+        creatorId: 'user-1',
+        categoryId: null,
+        comment: 'alt',
+        startAt: new Date('2026-02-02T08:00:00Z'),
+        endAt: new Date('2026-02-02T10:00:00Z'),
+      });
+
+      repo.findOne
+        .mockResolvedValueOnce(existing())
+        .mockResolvedValueOnce(null);
+      await service.update('entry-1', {
+        endAt: new Date('2026-02-02T11:00:00Z'),
+      });
+      expect(repo.save).toHaveBeenLastCalledWith(
+        expect.objectContaining({ comment: 'alt' }),
+      );
+
+      repo.findOne
+        .mockResolvedValueOnce(existing())
+        .mockResolvedValueOnce(null);
+      await service.update('entry-1', { comment: '' });
+      expect(repo.save).toHaveBeenLastCalledWith(
+        expect.objectContaining({ comment: null }),
+      );
+    });
+  });
+
   describe('update', () => {
     it('throws AppNotFoundException when the entry does not exist', async () => {
       repo.findOne.mockResolvedValue(null);

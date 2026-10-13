@@ -46,6 +46,10 @@ export class TimeEntryEntity {
   @Column({ type: 'timestamp' })
   endAt: Date;
 
+  // Freitext-Bemerkung zum Eintrag (z.B. "Material abgeholt"), optional.
+  @Column({ type: 'text', nullable: true })
+  comment?: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }

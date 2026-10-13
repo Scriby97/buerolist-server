@@ -21,6 +21,7 @@ export interface TimeEntryWithProject {
   creatorId: string;
   startAt: Date;
   endAt: Date;
+  comment: string | null;
   project: {
     id: string;
     title: string;
@@ -34,6 +35,12 @@ export interface TimeEntryWithProject {
     lastName?: string;
     email: string;
   };
+}
+
+// Leere/nur-Leerzeichen-Bemerkungen nicht als '' speichern, sondern als null.
+function normalizeComment(comment?: string | null): string | null {
+  const trimmed = comment?.trim();
+  return trimmed ? trimmed : null;
 }
 
 @Injectable()
@@ -127,6 +134,7 @@ export class TimeEntriesService {
       creatorId: t.creatorId,
       startAt: t.startAt,
       endAt: t.endAt,
+      comment: t.comment ?? null,
       project: {
         id: t.project.id,
         title: t.project.title,
@@ -243,6 +251,7 @@ export class TimeEntriesService {
     creatorId: string;
     startAt: Date;
     endAt: Date;
+    comment?: string | null;
   }): Promise<TimeEntryEntity> {
     const project = await this.projectRepo.findOne({
       where: { id: data.projectId },
@@ -263,7 +272,10 @@ export class TimeEntriesService {
     );
     await this.assertNoOverlap(data.creatorId, data.startAt, data.endAt);
 
-    const entry = this.repo.create(data as DeepPartial<TimeEntryEntity>);
+    const entry = this.repo.create({
+      ...data,
+      comment: normalizeComment(data.comment),
+    } as DeepPartial<TimeEntryEntity>);
     return this.saveChecked(entry);
   }
 
@@ -273,6 +285,7 @@ export class TimeEntriesService {
       categoryId?: string | null;
       startAt?: Date;
       endAt?: Date;
+      comment?: string | null;
     },
   ): Promise<TimeEntryEntity> {
     const entry = await this.repo.findOne({ where: { id } });
@@ -305,6 +318,9 @@ export class TimeEntriesService {
     entry.startAt = nextStartAt;
     entry.endAt = nextEndAt;
     entry.categoryId = nextCategoryId;
+    if (data.comment !== undefined) {
+      entry.comment = normalizeComment(data.comment);
+    }
     return this.saveChecked(entry);
   }
 

@@ -1,4 +1,12 @@
-import { IsDateString, IsOptional, IsUUID } from 'class-validator';
+import {
+  IsDateString,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
+
+export const TIME_ENTRY_COMMENT_MAX_LENGTH = 1000;
 
 export class CreateTimeEntryDto {
   @IsUUID()
@@ -13,4 +21,9 @@ export class CreateTimeEntryDto {
 
   @IsDateString()
   endAt: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(TIME_ENTRY_COMMENT_MAX_LENGTH)
+  comment?: string;
 }

@@ -145,6 +145,7 @@ export class TimeEntriesController {
       creatorId: user.id,
       startAt: new Date(dto.startAt),
       endAt: new Date(dto.endAt),
+      comment: dto.comment,
     });
   }
 
@@ -167,6 +168,7 @@ export class TimeEntriesController {
       categoryId: dto.categoryId,
       startAt: dto.startAt ? new Date(dto.startAt) : undefined,
       endAt: dto.endAt ? new Date(dto.endAt) : undefined,
+      comment: dto.comment,
     });
   }
 
