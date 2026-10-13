@@ -54,7 +54,12 @@ export class CustomersController {
     }
   }
 
-  private async resolveOrganizationIds(
+  /**
+   * Organisationen, deren Kunden der User sehen darf: nur die, in denen er
+   * Admin/Owner ist - normale Mitarbeiter sehen den Kunden-Bereich nicht
+   * (sie buchen ueber die Projektauswahl, GET /projects).
+   */
+  private async resolveManagedOrganizationIds(
     user: AuthUser,
     queryOrgId?: string,
   ): Promise<string[] | undefined> {
@@ -62,21 +67,21 @@ export class CustomersController {
       return queryOrgId ? [queryOrgId] : undefined;
     }
 
-    const organizationIds = await this.membersService.getOrganizationIds(
+    const managedOrgIds = await this.membersService.getManagedOrganizationIds(
       user.id,
     );
 
     if (queryOrgId) {
-      if (!organizationIds.includes(queryOrgId)) {
+      if (!managedOrgIds.includes(queryOrgId)) {
         throw new AppForbiddenException(
-          ErrorCode.ORG_NOT_MEMBER_OF_TARGET,
-          'Du bist kein Mitglied dieser Organisation',
+          ErrorCode.ORG_CUSTOMER_MANAGE_FORBIDDEN,
+          'Nur Organisations-Admins oder -Owner dürfen Kunden sehen',
         );
       }
       return [queryOrgId];
     }
 
-    return organizationIds;
+    return managedOrgIds;
   }
 
   private async resolveManagedOrganizationId(
@@ -122,24 +127,6 @@ export class CustomersController {
     );
   }
 
-  private async assertInSameOrg(
-    user: AuthUser,
-    customer: { organizationId: string },
-  ): Promise<void> {
-    if (user.role === UserRole.ADMINISTRATOR) {
-      return;
-    }
-    const organizationIds = await this.membersService.getOrganizationIds(
-      user.id,
-    );
-    if (!organizationIds.includes(customer.organizationId)) {
-      throw new AppForbiddenException(
-        ErrorCode.CUSTOMER_NOT_IN_YOUR_ORG,
-        'Kunde gehört nicht zu deiner Organisation',
-      );
-    }
-  }
-
   private async assertCanManageCustomer(
     user: AuthUser,
     customer: { organizationId: string },
@@ -167,22 +154,25 @@ export class CustomersController {
 
   /**
    * GET /customers
-   * Alle Mitglieder einer Organisation dürfen die Kundenliste sehen (für die
-   * Projekt-/Zeiterfassung), Verwalten (Anlegen/Bearbeiten/Löschen) bleibt
-   * Admin/Owner vorbehalten.
+   * Nur Admin/Owner (und globale Administratoren) - normale Mitarbeiter haben
+   * keinen Zugriff auf den Kunden-Bereich.
    */
   @Get()
   async getAll(
     @CurrentUser() user: AuthUser,
     @Query('organizationId') queryOrgId?: string,
   ) {
-    const organizationIds = await this.resolveOrganizationIds(user, queryOrgId);
+    const organizationIds = await this.resolveManagedOrganizationIds(
+      user,
+      queryOrgId,
+    );
     return this.customersService.findAll(organizationIds);
   }
 
   /**
    * GET /customers/:id
-   * Kunden-Detailansicht inkl. Projekt-History und Notizen+Fotos.
+   * Kunden-Detailansicht inkl. Projekt-History und Notizen+Fotos - nur
+   * Admin/Owner, siehe GET /customers.
    */
   @Get(':id')
   async getOne(@Param('id') id: string, @CurrentUser() user: AuthUser) {
@@ -194,7 +184,7 @@ export class CustomersController {
         { id },
       );
     }
-    await this.assertInSameOrg(user, detail.customer);
+    await this.assertCanManageCustomer(user, detail.customer);
     return detail;
   }
 
