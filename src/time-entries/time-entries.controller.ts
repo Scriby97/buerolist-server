@@ -99,6 +99,9 @@ export class TimeEntriesController {
    * Einträge ihrer Organisation, Mitarbeiter nur ihre eigenen.
    * Optional ?startDate=...&endDate=... (ISO-Datetime, nur zusammen) fuer die
    * Kalenderansicht - filtert nach startAt, typischerweise ohne limit.
+   * Optional ?creatorId=... schränkt auf die Einträge einer Person ein
+   * (Mitarbeiterauswahl für Admin/Owner). Mitarbeiter dürfen nur ihre eigene
+   * ID angeben.
    */
   @Get()
   async getAll(
@@ -109,9 +112,24 @@ export class TimeEntriesController {
     @Query('cursor') cursorParam?: string,
     @Query('startDate') startDateParam?: string,
     @Query('endDate') endDateParam?: string,
+    @Query('creatorId') requestedCreatorId?: string,
   ) {
     const organizationIds = await this.resolveOrganizationIds(user, queryOrgId);
-    const creatorId = await this.resolveCreatorIdFilter(user, organizationIds);
+    const ownCreatorFilter = await this.resolveCreatorIdFilter(
+      user,
+      organizationIds,
+    );
+    if (
+      requestedCreatorId &&
+      ownCreatorFilter &&
+      requestedCreatorId !== ownCreatorFilter
+    ) {
+      throw new AppForbiddenException(
+        ErrorCode.AUTH_FORBIDDEN_GENERIC,
+        'Mitarbeiter dürfen nur ihre eigenen Zeiteinträge sehen',
+      );
+    }
+    const creatorId = requestedCreatorId || ownCreatorFilter;
     const { startDate, endDate } = parseOptionalDateRange(
       startDateParam,
       endDateParam,
