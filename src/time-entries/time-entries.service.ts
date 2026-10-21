@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DeepPartial, LessThan, MoreThan, Not, Repository } from 'typeorm';
+import { DeepPartial, In, LessThan, MoreThan, Not, Repository } from 'typeorm';
 import { TimeEntryEntity } from './time-entry.entity';
+import {
+  TimeEntryItemEntity,
+  type TimeEntryItemType,
+} from './time-entry-item.entity';
 import { ProjectEntity } from '../projects/project.entity';
 import { ProjectCategoryEntity } from '../project-categories/project-category.entity';
 import {
@@ -14,6 +18,31 @@ import {
   type TimeEntryCursor,
 } from './time-entry-cursor.util';
 
+export interface TimeEntryItemInput {
+  type: TimeEntryItemType;
+  quantity: number;
+  description: string;
+  unitPriceRappen: number;
+}
+
+export interface TimeEntryItemView {
+  id: string;
+  type: TimeEntryItemType;
+  quantity: number;
+  description: string;
+  unitPriceRappen: number;
+}
+
+function toItemView(item: TimeEntryItemEntity): TimeEntryItemView {
+  return {
+    id: item.id,
+    type: item.type,
+    quantity: Number(item.quantity),
+    description: item.description,
+    unitPriceRappen: item.unitPriceRappen,
+  };
+}
+
 export interface TimeEntryWithProject {
   id: string;
   projectId: string;
@@ -22,6 +51,7 @@ export interface TimeEntryWithProject {
   startAt: Date;
   endAt: Date;
   comment: string | null;
+  items: TimeEntryItemView[];
   project: {
     id: string;
     title: string;
@@ -54,7 +84,49 @@ export class TimeEntriesService {
     private readonly projectRepo: Repository<ProjectEntity>,
     @InjectRepository(ProjectCategoryEntity)
     private readonly projectCategoryRepo: Repository<ProjectCategoryEntity>,
+    @InjectRepository(TimeEntryItemEntity)
+    private readonly itemRepo: Repository<TimeEntryItemEntity>,
   ) {}
+
+  /** Positionen mehrerer Eintraege in einer Abfrage, gruppiert nach Eintrag. */
+  private async loadItems(
+    timeEntryIds: string[],
+  ): Promise<Map<string, TimeEntryItemView[]>> {
+    const byEntry = new Map<string, TimeEntryItemView[]>();
+    if (timeEntryIds.length === 0) return byEntry;
+    const items = await this.itemRepo.find({
+      where: { timeEntryId: In(timeEntryIds) },
+      order: { position: 'ASC' },
+    });
+    for (const item of items) {
+      const list = byEntry.get(item.timeEntryId) ?? [];
+      list.push(toItemView(item));
+      byEntry.set(item.timeEntryId, list);
+    }
+    return byEntry;
+  }
+
+  /** Ersetzt alle Positionen eines Eintrags (Reihenfolge wie uebergeben). */
+  private async replaceItems(
+    timeEntryId: string,
+    items: TimeEntryItemInput[],
+  ): Promise<TimeEntryItemView[]> {
+    await this.itemRepo.delete({ timeEntryId });
+    if (items.length === 0) return [];
+    const saved = await this.itemRepo.save(
+      items.map((item, index) =>
+        this.itemRepo.create({
+          timeEntryId,
+          type: item.type,
+          position: index,
+          quantity: item.quantity,
+          description: item.description.trim(),
+          unitPriceRappen: item.unitPriceRappen,
+        }),
+      ),
+    );
+    return saved.map(toItemView);
+  }
 
   /**
    * Zeiteinträge mit Projekt-/Kategorie-/Ersteller-Daten, cursor-paginiert
@@ -123,6 +195,9 @@ export class TimeEntriesService {
     const fetched = await qb.getMany();
     const hasMore = limit !== undefined && fetched.length > limit;
     const entries = hasMore ? fetched.slice(0, limit) : fetched;
+    // Positionen separat laden (ein Join wuerde das limit der Paginierung
+    // verfaelschen, weil es Zeilen statt Eintraege zaehlt).
+    const itemsByEntry = await this.loadItems(entries.map((t) => t.id));
     const last = entries[entries.length - 1];
     const nextCursor =
       hasMore && last
@@ -137,6 +212,7 @@ export class TimeEntriesService {
       startAt: t.startAt,
       endAt: t.endAt,
       comment: t.comment ?? null,
+      items: itemsByEntry.get(t.id) ?? [],
       project: {
         id: t.project.id,
         title: t.project.title,
@@ -256,7 +332,8 @@ export class TimeEntriesService {
     startAt: Date;
     endAt: Date;
     comment?: string | null;
-  }): Promise<TimeEntryEntity> {
+    items?: TimeEntryItemInput[];
+  }): Promise<TimeEntryEntity & { items: TimeEntryItemView[] }> {
     const project = await this.projectRepo.findOne({
       where: { id: data.projectId },
     });
@@ -276,11 +353,16 @@ export class TimeEntriesService {
     );
     await this.assertNoOverlap(data.creatorId, data.startAt, data.endAt);
 
+    const { items, ...entryData } = data;
     const entry = this.repo.create({
-      ...data,
+      ...entryData,
       comment: normalizeComment(data.comment),
     } as DeepPartial<TimeEntryEntity>);
-    return this.saveChecked(entry);
+    const saved = await this.saveChecked(entry);
+    const savedItems = items?.length
+      ? await this.replaceItems(saved.id, items)
+      : [];
+    return Object.assign(saved, { items: savedItems });
   }
 
   async update(
@@ -290,8 +372,9 @@ export class TimeEntriesService {
       startAt?: Date;
       endAt?: Date;
       comment?: string | null;
+      items?: TimeEntryItemInput[];
     },
-  ): Promise<TimeEntryEntity> {
+  ): Promise<TimeEntryEntity & { items: TimeEntryItemView[] }> {
     const entry = await this.repo.findOne({ where: { id } });
     if (!entry) {
       throw new AppNotFoundException(
@@ -325,7 +408,12 @@ export class TimeEntriesService {
     if (data.comment !== undefined) {
       entry.comment = normalizeComment(data.comment);
     }
-    return this.saveChecked(entry);
+    const saved = await this.saveChecked(entry);
+    const items =
+      data.items !== undefined
+        ? await this.replaceItems(id, data.items)
+        : ((await this.loadItems([id])).get(id) ?? []);
+    return Object.assign(saved, { items });
   }
 
   async delete(id: string): Promise<void> {

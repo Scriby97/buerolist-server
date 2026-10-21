@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { LessThan, MoreThan, Not } from 'typeorm';
 import { TimeEntriesService } from './time-entries.service';
 import { TimeEntryEntity } from './time-entry.entity';
+import { TimeEntryItemEntity } from './time-entry-item.entity';
 import { ProjectEntity } from '../projects/project.entity';
 import { ProjectCategoryEntity } from '../project-categories/project-category.entity';
 import {
@@ -20,6 +21,14 @@ describe('TimeEntriesService', () => {
   };
   const projectRepo = { findOne: jest.fn() };
   const projectCategoryRepo = { findOne: jest.fn() };
+  const itemRepo = {
+    create: jest.fn((d) => d),
+    save: jest.fn((items: object[]) =>
+      Promise.resolve(items.map((it, i) => ({ id: `item-${i}`, ...it }))),
+    ),
+    delete: jest.fn().mockResolvedValue(undefined),
+    find: jest.fn().mockResolvedValue([]),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -32,6 +41,10 @@ describe('TimeEntriesService', () => {
         {
           provide: getRepositoryToken(ProjectCategoryEntity),
           useValue: projectCategoryRepo,
+        },
+        {
+          provide: getRepositoryToken(TimeEntryItemEntity),
+          useValue: itemRepo,
         },
       ],
     }).compile();
@@ -218,6 +231,94 @@ describe('TimeEntriesService', () => {
       expect(repo.save).toHaveBeenLastCalledWith(
         expect.objectContaining({ comment: null }),
       );
+    });
+  });
+
+  describe('Material und Spesen', () => {
+    const base = {
+      projectId: 'project-1',
+      creatorId: 'user-1',
+      startAt: new Date('2026-03-02T08:00:00Z'),
+      endAt: new Date('2026-03-02T10:00:00Z'),
+    };
+    const kitt = {
+      type: 'material' as const,
+      quantity: 1,
+      description: '  Patrone Kitt ',
+      unitPriceRappen: 1040,
+    };
+    const parking = {
+      type: 'expense' as const,
+      quantity: 1,
+      description: 'Parkgebühr',
+      unitPriceRappen: 500,
+    };
+
+    it('speichert die Positionen beim Erfassen in der angegebenen Reihenfolge', async () => {
+      projectRepo.findOne.mockResolvedValue({ id: 'project-1' });
+      repo.findOne.mockResolvedValue(null);
+      repo.save.mockImplementationOnce((d) =>
+        Promise.resolve({ id: 'e1', ...d }),
+      );
+
+      const created = await service.create({ ...base, items: [kitt, parking] });
+
+      expect(itemRepo.save).toHaveBeenCalledWith([
+        expect.objectContaining({
+          timeEntryId: 'e1',
+          position: 0,
+          description: 'Patrone Kitt',
+          unitPriceRappen: 1040,
+        }),
+        expect.objectContaining({ position: 1, type: 'expense' }),
+      ]);
+      expect(created.items).toHaveLength(2);
+    });
+
+    it('ersetzt beim Bearbeiten alle Positionen, wenn eine Liste mitkommt', async () => {
+      repo.findOne
+        .mockResolvedValueOnce({
+          id: 'e1',
+          projectId: 'project-1',
+          creatorId: 'user-1',
+          categoryId: null,
+          startAt: base.startAt,
+          endAt: base.endAt,
+        })
+        .mockResolvedValueOnce(null);
+
+      const updated = await service.update('e1', { items: [parking] });
+
+      expect(itemRepo.delete).toHaveBeenCalledWith({ timeEntryId: 'e1' });
+      expect(itemRepo.save).toHaveBeenCalledWith([
+        expect.objectContaining({ type: 'expense', position: 0 }),
+      ]);
+      expect(updated.items.map((i) => i.description)).toEqual(['Parkgebühr']);
+    });
+
+    it('laesst die Positionen unveraendert, wenn keine Liste mitkommt', async () => {
+      repo.findOne
+        .mockResolvedValueOnce({
+          id: 'e1',
+          projectId: 'project-1',
+          creatorId: 'user-1',
+          categoryId: null,
+          startAt: base.startAt,
+          endAt: base.endAt,
+        })
+        .mockResolvedValueOnce(null);
+      itemRepo.find.mockResolvedValueOnce([
+        { id: 'i1', timeEntryId: 'e1', ...kitt, quantity: '2.50' },
+      ]);
+
+      const updated = await service.update('e1', { comment: 'x' });
+
+      expect(itemRepo.delete).not.toHaveBeenCalled();
+      // NUMERIC kommt als String - wird als Zahl ausgeliefert.
+      expect(updated.items[0]).toMatchObject({
+        quantity: 2.5,
+        unitPriceRappen: 1040,
+      });
     });
   });
 

@@ -4,7 +4,12 @@ import {
   IsString,
   IsUUID,
   MaxLength,
+  ArrayMaxSize,
+  IsArray,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+import { TIME_ENTRY_MAX_ITEMS, TimeEntryItemDto } from './time-entry-item.dto';
 import { TIME_ENTRY_COMMENT_MAX_LENGTH } from './create-time-entry.dto';
 
 export class UpdateTimeEntryDto {
@@ -25,4 +30,13 @@ export class UpdateTimeEntryDto {
   @IsString()
   @MaxLength(TIME_ENTRY_COMMENT_MAX_LENGTH)
   comment?: string | null;
+
+  // Material/Spesen. Beim Bearbeiten ersetzt eine mitgeschickte Liste alle
+  // bisherigen Positionen; weglassen laesst sie unveraendert.
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(TIME_ENTRY_MAX_ITEMS)
+  @ValidateNested({ each: true })
+  @Type(() => TimeEntryItemDto)
+  items?: TimeEntryItemDto[];
 }

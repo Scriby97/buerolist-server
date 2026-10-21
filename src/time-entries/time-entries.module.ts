@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { TimeEntriesService } from './time-entries.service';
 import { TimeEntriesController } from './time-entries.controller';
 import { TimeEntryEntity } from './time-entry.entity';
+import { TimeEntryItemEntity } from './time-entry-item.entity';
 import { ProjectEntity } from '../projects/project.entity';
 import { ProjectCategoryEntity } from '../project-categories/project-category.entity';
 import { AuthModule } from '../auth/auth.module';
@@ -13,6 +14,7 @@ import { ProjectsModule } from '../projects/projects.module';
   imports: [
     TypeOrmModule.forFeature([
       TimeEntryEntity,
+      TimeEntryItemEntity,
       ProjectEntity,
       ProjectCategoryEntity,
     ]),

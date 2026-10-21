@@ -6,10 +6,12 @@ import {
   JoinColumn,
   CreateDateColumn,
   Index,
+  OneToMany,
 } from 'typeorm';
 import { ProjectEntity } from '../projects/project.entity';
 import { CategoryEntity } from '../categories/category.entity';
 import { UserProfileEntity } from '../auth/entities/user-profile.entity';
+import { TimeEntryItemEntity } from './time-entry-item.entity';
 
 @Entity({ name: 'time_entries' })
 @Index('idx_time_entries_project_start', ['projectId', 'startAt'])
@@ -49,6 +51,10 @@ export class TimeEntryEntity {
   // Freitext-Bemerkung zum Eintrag (z.B. "Material abgeholt"), optional.
   @Column({ type: 'text', nullable: true })
   comment?: string | null;
+
+  // Material/Spesen (migrations/006) - werden separat geladen/ersetzt.
+  @OneToMany(() => TimeEntryItemEntity, (item) => item.timeEntry)
+  items?: TimeEntryItemEntity[];
 
   @CreateDateColumn()
   createdAt: Date;

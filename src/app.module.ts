@@ -13,6 +13,7 @@ import { CategoryEntity } from './categories/category.entity';
 import { ProjectEntity } from './projects/project.entity';
 import { ProjectCategoryEntity } from './project-categories/project-category.entity';
 import { TimeEntryEntity } from './time-entries/time-entry.entity';
+import { TimeEntryItemEntity } from './time-entries/time-entry-item.entity';
 import { NoteEntity } from './notes/note.entity';
 import { NotePhotoEntity } from './notes/note-photo.entity';
 import { SupabaseModule } from './supabase/supabase.module';
@@ -45,6 +46,7 @@ import { NotesModule } from './notes/notes.module';
         ProjectEntity,
         ProjectCategoryEntity,
         TimeEntryEntity,
+        TimeEntryItemEntity,
         NoteEntity,
         NotePhotoEntity,
       ],
