@@ -184,3 +184,54 @@ describe('TimeEntriesController - Bearbeiten/Löschen nur in der laufenden Woche
     });
   });
 });
+
+describe('TimeEntriesController.create - keine Nachträge für frühere Wochen', () => {
+  const create = jest.fn().mockResolvedValue({});
+  const membersService = {
+    getOrganizationIds: jest.fn().mockResolvedValue(['org-1']),
+    findMembership: jest.fn(),
+  };
+  const projectsService = {
+    findOne: jest.fn().mockResolvedValue({ id: 'p1', organizationId: 'org-1' }),
+  };
+  const controller = new TimeEntriesController(
+    { create } as unknown as TimeEntriesService,
+    projectsService as unknown as ProjectsService,
+    membersService as unknown as OrganizationMembersService,
+  );
+  const me = { id: 'me', role: UserRole.USER } as unknown as AuthUser;
+  const dto = (day: string) => ({
+    projectId: 'p1',
+    startAt: `${day}T07:00:00+02:00`,
+    endAt: `${day}T09:00:00+02:00`,
+  });
+
+  beforeAll(() => {
+    jest.useFakeTimers({ now: new Date('2026-10-21T10:00:00+02:00') });
+  });
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+  beforeEach(() => jest.clearAllMocks());
+
+  it('Mitarbeiter: diese Woche erlaubt, Vorwoche gesperrt', async () => {
+    membersService.findMembership.mockResolvedValue({
+      role: OrganizationRole.EMPLOYEE,
+    });
+    await controller.create(dto('2026-10-19'), me);
+    expect(create).toHaveBeenCalledTimes(1);
+
+    await expect(controller.create(dto('2026-10-16'), me)).rejects.toThrow(
+      AppForbiddenException,
+    );
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('Admin/Owner: darf auch rückwirkend erfassen', async () => {
+    membersService.findMembership.mockResolvedValue({
+      role: OrganizationRole.OWNER,
+    });
+    await controller.create(dto('2026-09-01'), me);
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+});

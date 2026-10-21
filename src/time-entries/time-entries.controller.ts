@@ -151,11 +151,25 @@ export class TimeEntriesController {
   /**
    * POST /time-entries
    * Normale User dürfen nur auf Projekte ihrer eigenen Organisation(en) buchen.
+   * Mitarbeiter zudem nur in der laufenden Woche (keine Nachträge für frühere
+   * Wochen) - Admin/Owner dürfen auch rückwirkend erfassen.
    */
   @Post()
   async create(@Body() dto: CreateTimeEntryDto, @CurrentUser() user: AuthUser) {
     if (user.role !== UserRole.ADMINISTRATOR) {
-      await this.assertProjectInUsersOrganization(dto.projectId, user);
+      const organizationId = await this.assertProjectInUsersOrganization(
+        dto.projectId,
+        user,
+      );
+      if (
+        !isInCurrentWorkWeek(new Date(dto.startAt)) &&
+        !(await this.isOrganizationManager(user.id, organizationId))
+      ) {
+        throw new AppForbiddenException(
+          ErrorCode.TIME_ENTRY_LOCKED,
+          'Zeiten für frühere Wochen können nur noch von Admins erfasst werden',
+        );
+      }
     }
 
     return this.timeEntriesService.create({
@@ -209,7 +223,7 @@ export class TimeEntriesController {
   private async assertProjectInUsersOrganization(
     projectId: string,
     user: AuthUser,
-  ): Promise<void> {
+  ): Promise<string> {
     const organizationIds = await this.membersService.getOrganizationIds(
       user.id,
     );
@@ -227,6 +241,21 @@ export class TimeEntriesController {
         'Projekt gehört nicht zu deiner Organisation',
       );
     }
+    return project.organizationId;
+  }
+
+  private async isOrganizationManager(
+    userId: string,
+    organizationId: string,
+  ): Promise<boolean> {
+    const membership = await this.membersService.findMembership(
+      userId,
+      organizationId,
+    );
+    return (
+      membership?.role === OrganizationRole.ADMIN ||
+      membership?.role === OrganizationRole.OWNER
+    );
   }
 
   /**
@@ -251,14 +280,8 @@ export class TimeEntriesController {
       );
     }
 
-    const membership = await this.membersService.findMembership(
-      user.id,
-      entry.project.organizationId,
-    );
     if (
-      membership &&
-      (membership.role === OrganizationRole.ADMIN ||
-        membership.role === OrganizationRole.OWNER)
+      await this.isOrganizationManager(user.id, entry.project.organizationId)
     ) {
       return;
     }
