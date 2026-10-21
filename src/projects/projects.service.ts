@@ -14,6 +14,14 @@ import {
 } from '../common/exceptions';
 import { saveWithNextNumber } from '../common/utils/next-number.util';
 
+/** Summe Material bzw. Spesen eines Mitarbeiters auf einem Projekt. */
+export interface ProjectCostSummaryRow {
+  creatorId: string;
+  type: 'material' | 'expense';
+  /** Summe von Menge x Stueckpreis, in Rappen */
+  totalRappen: number;
+}
+
 export interface ProjectTimeSummaryRow {
   creatorId: string;
   creatorFirstName: string | null;
@@ -98,6 +106,7 @@ export class ProjectsService {
     categories: CategoryEntity[];
     notes: NoteEntity[];
     timeSummary: ProjectTimeSummaryRow[];
+    costSummary: ProjectCostSummaryRow[];
   } | null> {
     const project = await this.repo.findOne({
       where: { id },
@@ -107,7 +116,7 @@ export class ProjectsService {
       return null;
     }
 
-    const [categories, notes, timeSummary] = await Promise.all([
+    const [categories, notes, timeSummary, costSummary] = await Promise.all([
       this.loadCategoriesForProject(id),
       this.noteRepo.find({
         where: { projectId: id },
@@ -115,9 +124,10 @@ export class ProjectsService {
         order: { createdAt: 'DESC' },
       }),
       this.timeSummary(id),
+      this.costSummary(id),
     ]);
 
-    return { project, categories, notes, timeSummary };
+    return { project, categories, notes, timeSummary, costSummary };
   }
 
   /**
@@ -158,6 +168,31 @@ export class ProjectsService {
     return raw.map((r) => ({
       ...r,
       totalMinutes: Math.round(Number(r.totalMinutes) || 0),
+    }));
+  }
+
+  /**
+   * Material und Spesen eines Projekts, summiert pro Mitarbeiter und Typ
+   * (Menge x Stueckpreis, je Position auf Rappen gerundet).
+   */
+  async costSummary(projectId: string): Promise<ProjectCostSummaryRow[]> {
+    const raw = await this.timeEntryRepo
+      .createQueryBuilder('t')
+      .innerJoin('t.items', 'i')
+      .select('t.creatorId', 'creatorId')
+      .addSelect('i.type', 'type')
+      .addSelect(
+        'COALESCE(SUM(ROUND(i.quantity * i."unitPriceRappen")), 0)',
+        'totalRappen',
+      )
+      .where('t.projectId = :projectId', { projectId })
+      .groupBy('t.creatorId, i.type')
+      .getRawMany<{ creatorId: string; type: string; totalRappen: string }>();
+
+    return raw.map((r) => ({
+      creatorId: r.creatorId,
+      type: r.type === 'expense' ? 'expense' : 'material',
+      totalRappen: Math.round(Number(r.totalRappen) || 0),
     }));
   }
 

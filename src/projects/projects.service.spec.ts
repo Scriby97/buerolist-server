@@ -53,6 +53,31 @@ describe('ProjectsService', () => {
     service = module.get<ProjectsService>(ProjectsService);
   });
 
+  describe('costSummary', () => {
+    it('liefert Material/Spesen pro Mitarbeiter als ganze Rappen', async () => {
+      const qb = {
+        innerJoin: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([
+          { creatorId: 'u1', type: 'material', totalRappen: '3120' },
+          { creatorId: 'u1', type: 'expense', totalRappen: '500.0' },
+        ]),
+      };
+      timeEntryRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await expect(service.costSummary('project-1')).resolves.toEqual([
+        { creatorId: 'u1', type: 'material', totalRappen: 3120 },
+        { creatorId: 'u1', type: 'expense', totalRappen: 500 },
+      ]);
+      expect(qb.where).toHaveBeenCalledWith('t.projectId = :projectId', {
+        projectId: 'project-1',
+      });
+    });
+  });
+
   describe('create', () => {
     const baseData = {
       title: 'Holzwerk renovieren',
