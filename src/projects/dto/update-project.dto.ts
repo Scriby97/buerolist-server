@@ -5,12 +5,14 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  IsNotEmpty,
 } from 'class-validator';
 import { ProjectStatus } from '../project-status.enum';
 
 export class UpdateProjectDto {
   @IsOptional()
   @IsString()
+  @IsNotEmpty()
   title?: string;
 
   @IsOptional()
