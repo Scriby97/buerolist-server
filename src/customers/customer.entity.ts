@@ -8,12 +8,14 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   Index,
+  Unique,
 } from 'typeorm';
 import { OrganizationEntity } from '../organizations/organization.entity';
 import { ProjectEntity } from '../projects/project.entity';
 
 @Entity({ name: 'customers' })
 @Index('idx_customers_organization', ['organizationId'])
+@Unique('uq_customers_organization_number', ['organizationId', 'number'])
 export class CustomerEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -24,6 +26,10 @@ export class CustomerEntity {
   @ManyToOne(() => OrganizationEntity, { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'organizationId' })
   organization: OrganizationEntity;
+
+  // Fortlaufende Kundennummer pro Organisation (angezeigt als "001").
+  @Column({ type: 'integer' })
+  number: number;
 
   @Column({ type: 'varchar' })
   name: string;

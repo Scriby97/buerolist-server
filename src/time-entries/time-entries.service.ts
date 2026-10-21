@@ -25,8 +25,10 @@ export interface TimeEntryWithProject {
   project: {
     id: string;
     title: string;
+    number: number;
     customerId: string;
     customerName: string;
+    customerNumber: number;
   };
   category: { id: string; name: string } | null;
   creator: {
@@ -138,8 +140,10 @@ export class TimeEntriesService {
       project: {
         id: t.project.id,
         title: t.project.title,
+        number: t.project.number,
         customerId: t.project.customerId,
         customerName: t.project.customer.name,
+        customerNumber: t.project.customer.number,
       },
       category: t.category
         ? { id: t.category.id, name: t.category.name }

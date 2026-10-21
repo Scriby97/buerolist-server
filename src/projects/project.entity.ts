@@ -8,6 +8,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   Index,
+  Unique,
 } from 'typeorm';
 import { OrganizationEntity } from '../organizations/organization.entity';
 import { CustomerEntity } from '../customers/customer.entity';
@@ -16,6 +17,7 @@ import { ProjectStatus } from './project-status.enum';
 
 @Entity({ name: 'projects' })
 @Index('idx_projects_organization', ['organizationId'])
+@Unique('uq_projects_customer_number', ['customerId', 'number'])
 export class ProjectEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -35,6 +37,11 @@ export class ProjectEntity {
   })
   @JoinColumn({ name: 'customerId' })
   customer: CustomerEntity;
+
+  // Fortlaufende Projektnummer pro Kunde (angezeigt als "001-02" zusammen
+  // mit der Kundennummer).
+  @Column({ type: 'integer' })
+  number: number;
 
   @Column({ type: 'varchar' })
   title: string;

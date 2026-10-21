@@ -18,6 +18,7 @@ describe('ProjectsService', () => {
     create: jest.fn((d) => d),
     save: jest.fn((d) => Promise.resolve({ id: 'project-1', ...d })),
     findOne: jest.fn(),
+    maximum: jest.fn().mockResolvedValue(null),
   };
   const projectCategoryRepo = {
     create: jest.fn((d) => d),
@@ -64,6 +65,18 @@ describe('ProjectsService', () => {
 
       expect(repo.save).toHaveBeenCalled();
       expect(projectCategoryRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('numbers projects per customer (highest + 1, first = 1)', async () => {
+      const first = await service.create(baseData);
+      expect(first.number).toBe(1);
+
+      repo.maximum.mockResolvedValueOnce(11);
+      const twelfth = await service.create(baseData);
+      expect(twelfth.number).toBe(12);
+      expect(repo.maximum).toHaveBeenLastCalledWith('number', {
+        customerId: 'customer-1',
+      });
     });
 
     it('throws AppNotFoundException when a category id does not exist', async () => {

@@ -12,6 +12,7 @@ import {
   AppNotFoundException,
   ErrorCode,
 } from '../common/exceptions';
+import { saveWithNextNumber } from '../common/utils/next-number.util';
 
 export interface ProjectTimeSummaryRow {
   creatorId: string;
@@ -200,12 +201,18 @@ export class ProjectsService {
     const categoryIds = data.categoryIds ?? [];
     await this.assertCategoriesBelongToOrg(categoryIds, data.organizationId);
 
-    const project = this.repo.create({
-      title: data.title,
-      customerId: data.customerId,
-      organizationId: data.organizationId,
-    });
-    const saved = await this.repo.save(project);
+    const saved = await saveWithNextNumber(
+      () => this.repo.maximum('number', { customerId: data.customerId }),
+      (number) =>
+        this.repo.save(
+          this.repo.create({
+            title: data.title,
+            customerId: data.customerId,
+            organizationId: data.organizationId,
+            number,
+          }),
+        ),
+    );
 
     if (categoryIds.length > 0) {
       await this.projectCategoryRepo.save(

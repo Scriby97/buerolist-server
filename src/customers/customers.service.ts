@@ -9,6 +9,7 @@ import {
   AppNotFoundException,
   ErrorCode,
 } from '../common/exceptions';
+import { saveWithNextNumber } from '../common/utils/next-number.util';
 
 export interface CustomerDetail extends CustomerEntity {
   notes: NoteEntity[];
@@ -84,8 +85,11 @@ export class CustomersService {
     address?: string;
     organizationId: string;
   }): Promise<CustomerEntity> {
-    const customer = this.repo.create(data);
-    return this.repo.save(customer);
+    return saveWithNextNumber(
+      () =>
+        this.repo.maximum('number', { organizationId: data.organizationId }),
+      (number) => this.repo.save(this.repo.create({ ...data, number })),
+    );
   }
 
   async update(
