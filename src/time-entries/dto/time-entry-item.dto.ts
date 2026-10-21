@@ -16,8 +16,9 @@ export class TimeEntryItemDto {
   @IsIn(['material', 'expense'])
   type: 'material' | 'expense';
 
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0.01)
+  // Ganze Zahl oder eine Nachkommastelle (z.B. 1.5 m)
+  @IsNumber({ maxDecimalPlaces: 1 })
+  @Min(0.1)
   @Max(100000)
   quantity: number;
 
