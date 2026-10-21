@@ -84,3 +84,103 @@ describe('TimeEntriesController.getAll - creatorId filter', () => {
     });
   });
 });
+
+describe('TimeEntriesController - Bearbeiten/Löschen nur in der laufenden Woche', () => {
+  const findOne = jest.fn();
+  const update = jest.fn().mockResolvedValue({});
+  const deleteEntry = jest.fn().mockResolvedValue(undefined);
+  const membersService = {
+    getOrganizationIds: jest.fn(),
+    findMembership: jest.fn(),
+  };
+  const controller = new TimeEntriesController(
+    { findOne, update, delete: deleteEntry } as unknown as TimeEntriesService,
+    {} as ProjectsService,
+    membersService as unknown as OrganizationMembersService,
+  );
+
+  const me = { id: 'me', role: UserRole.USER } as unknown as AuthUser;
+
+  // Heute: Mittwoch, 21.10.2026 - Woche beginnt am Montag 19.10.
+  beforeAll(() => {
+    jest.useFakeTimers({ now: new Date('2026-10-21T10:00:00+02:00') });
+  });
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
+  const entryOn = (startAt: string, creatorId = 'me') => ({
+    id: 'e1',
+    creatorId,
+    startAt: new Date(startAt),
+    project: { organizationId: 'org-1' },
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    membersService.findMembership.mockResolvedValue({
+      role: OrganizationRole.EMPLOYEE,
+    });
+  });
+
+  describe('als Mitarbeiter', () => {
+    it('darf eigene Einträge dieser Woche bearbeiten und löschen', async () => {
+      findOne.mockResolvedValue(entryOn('2026-10-19T07:00:00+02:00'));
+      await controller.update('e1', { comment: 'x' }, me);
+      await controller.remove('e1', me);
+      expect(update).toHaveBeenCalled();
+      expect(deleteEntry).toHaveBeenCalledWith('e1');
+    });
+
+    it('darf eigene Einträge der Vorwoche weder bearbeiten noch löschen', async () => {
+      findOne.mockResolvedValue(entryOn('2026-10-16T07:00:00+02:00'));
+      await expect(
+        controller.update('e1', { comment: 'x' }, me),
+      ).rejects.toThrow(AppForbiddenException);
+      await expect(controller.remove('e1', me)).rejects.toThrow(
+        AppForbiddenException,
+      );
+      expect(update).not.toHaveBeenCalled();
+      expect(deleteEntry).not.toHaveBeenCalled();
+    });
+
+    it('darf einen Eintrag dieser Woche nicht in die Vorwoche verschieben', async () => {
+      findOne.mockResolvedValue(entryOn('2026-10-20T07:00:00+02:00'));
+      await expect(
+        controller.update(
+          'e1',
+          {
+            startAt: '2026-10-16T07:00:00+02:00',
+            endAt: '2026-10-16T09:00:00+02:00',
+          },
+          me,
+        ),
+      ).rejects.toThrow(AppForbiddenException);
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('darf fremde Einträge nicht löschen', async () => {
+      findOne.mockResolvedValue(
+        entryOn('2026-10-20T07:00:00+02:00', 'someone-else'),
+      );
+      await expect(controller.remove('e1', me)).rejects.toThrow(
+        AppForbiddenException,
+      );
+    });
+  });
+
+  describe('als Admin/Owner', () => {
+    it('darf auch alte und fremde Einträge bearbeiten und löschen', async () => {
+      membersService.findMembership.mockResolvedValue({
+        role: OrganizationRole.ADMIN,
+      });
+      findOne.mockResolvedValue(
+        entryOn('2026-09-01T07:00:00+02:00', 'someone-else'),
+      );
+      await controller.update('e1', { comment: 'x' }, me);
+      await controller.remove('e1', me);
+      expect(update).toHaveBeenCalled();
+      expect(deleteEntry).toHaveBeenCalledWith('e1');
+    });
+  });
+});

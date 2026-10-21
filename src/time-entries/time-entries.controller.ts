@@ -26,6 +26,7 @@ import {
   parseOptionalLimit,
 } from './time-entry-cursor.util';
 import { parseOptionalDateRange } from '../common/utils/date-range.util';
+import { isInCurrentWorkWeek } from '../common/utils/work-week.util';
 
 @Controller('time-entries')
 export class TimeEntriesController {
@@ -179,7 +180,7 @@ export class TimeEntriesController {
     @CurrentUser() user: AuthUser,
   ) {
     if (user.role !== UserRole.ADMINISTRATOR) {
-      await this.assertCanEditTimeEntry(id, user);
+      await this.assertCanModifyTimeEntry(id, user, 'edit', dto.startAt);
     }
 
     return this.timeEntriesService.update(id, {
@@ -192,13 +193,13 @@ export class TimeEntriesController {
 
   /**
    * DELETE /time-entries/:id
-   * Nur Admin/Owner (oder globale Administratoren) dürfen Zeiteinträge
-   * löschen - Mitarbeiter nicht, auch nicht ihre eigenen.
+   * Admin/Owner (oder globale Administratoren) dürfen jeden Eintrag löschen,
+   * Mitarbeiter nur ihre eigenen aus der laufenden Woche.
    */
   @Delete(':id')
   async remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     if (user.role !== UserRole.ADMINISTRATOR) {
-      await this.assertCanManageTimeEntry(id, user);
+      await this.assertCanModifyTimeEntry(id, user, 'delete');
     }
 
     await this.timeEntriesService.delete(id);
@@ -228,9 +229,18 @@ export class TimeEntriesController {
     }
   }
 
-  private async assertCanManageTimeEntry(
+  /**
+   * Bearbeiten/Löschen eines Zeiteintrags:
+   * - Admin/Owner der Organisation: immer.
+   * - Mitarbeiter: nur eigene Einträge und nur in der laufenden Woche (ab
+   *   Montag 00:00 Schweizer Zeit) - ältere sind für sie gesperrt. Beim
+   *   Bearbeiten darf auch die neue Startzeit nicht in eine frühere Woche fallen.
+   */
+  private async assertCanModifyTimeEntry(
     timeEntryId: string,
     user: AuthUser,
+    action: 'edit' | 'delete',
+    newStartAt?: string,
   ): Promise<void> {
     const entry = await this.timeEntriesService.findOne(timeEntryId);
     if (!entry) {
@@ -246,46 +256,31 @@ export class TimeEntriesController {
       entry.project.organizationId,
     );
     if (
-      !membership ||
-      (membership.role !== OrganizationRole.ADMIN &&
-        membership.role !== OrganizationRole.OWNER)
+      membership &&
+      (membership.role === OrganizationRole.ADMIN ||
+        membership.role === OrganizationRole.OWNER)
     ) {
-      throw new AppForbiddenException(
-        ErrorCode.TIME_ENTRY_DELETE_FORBIDDEN,
-        'Nur Organisations-Admins oder -Owner dürfen Zeiteinträge löschen',
-      );
-    }
-  }
-
-  private async assertCanEditTimeEntry(
-    timeEntryId: string,
-    user: AuthUser,
-  ): Promise<void> {
-    const entry = await this.timeEntriesService.findOne(timeEntryId);
-    if (!entry) {
-      throw new AppNotFoundException(
-        ErrorCode.TIME_ENTRY_NOT_FOUND,
-        `Time entry with ID ${timeEntryId} not found`,
-        { id: timeEntryId },
-      );
-    }
-
-    if (entry.creatorId === user.id) {
       return;
     }
 
-    const membership = await this.membersService.findMembership(
-      user.id,
-      entry.project.organizationId,
-    );
-    if (
-      !membership ||
-      (membership.role !== OrganizationRole.ADMIN &&
-        membership.role !== OrganizationRole.OWNER)
-    ) {
+    if (entry.creatorId !== user.id) {
+      throw action === 'edit'
+        ? new AppForbiddenException(
+            ErrorCode.TIME_ENTRY_EDIT_FORBIDDEN,
+            'Nur Organisations-Admins oder -Owner dürfen fremde Zeiteinträge bearbeiten',
+          )
+        : new AppForbiddenException(
+            ErrorCode.TIME_ENTRY_DELETE_FORBIDDEN,
+            'Nur Organisations-Admins oder -Owner dürfen fremde Zeiteinträge löschen',
+          );
+    }
+
+    const movesIntoPastWeek =
+      newStartAt !== undefined && !isInCurrentWorkWeek(new Date(newStartAt));
+    if (!isInCurrentWorkWeek(entry.startAt) || movesIntoPastWeek) {
       throw new AppForbiddenException(
-        ErrorCode.TIME_ENTRY_EDIT_FORBIDDEN,
-        'Nur Organisations-Admins oder -Owner dürfen fremde Zeiteinträge bearbeiten',
+        ErrorCode.TIME_ENTRY_LOCKED,
+        'Einträge aus früheren Wochen können nur noch von Admins geändert werden',
       );
     }
   }
