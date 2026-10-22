@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { CategoryEntity } from './category.entity';
 import { CategoryGroupEntity } from './category-group.entity';
+import { CategoryTemplateEntity } from './category-template.entity';
 import {
   AppBadRequestException,
   AppNotFoundException,
@@ -17,7 +18,123 @@ export class CategoriesService {
     private readonly repo: Repository<CategoryEntity>,
     @InjectRepository(CategoryGroupEntity)
     private readonly groupRepo: Repository<CategoryGroupEntity>,
+    @InjectRepository(CategoryTemplateEntity)
+    private readonly templateRepo: Repository<CategoryTemplateEntity>,
   ) {}
+
+  // --- Kategorievorlagen ----------------------------------------------------
+
+  /** Vorlagen inkl. ihrer Kategorie-IDs, alphabetisch. */
+  async findTemplates(organizationIds?: string[]): Promise<
+    {
+      id: string;
+      organizationId: string;
+      name: string;
+      categoryIds: string[];
+    }[]
+  > {
+    if (organizationIds && organizationIds.length === 0) {
+      return [];
+    }
+    const templates = await this.templateRepo.find({
+      where: organizationIds ? { organizationId: In(organizationIds) } : {},
+      relations: ['categories'],
+      order: { name: 'ASC' },
+    });
+    return templates.map((t) => this.toTemplateView(t));
+  }
+
+  async findTemplate(id: string): Promise<CategoryTemplateEntity | null> {
+    return this.templateRepo.findOne({ where: { id } });
+  }
+
+  private toTemplateView(t: CategoryTemplateEntity) {
+    return {
+      id: t.id,
+      organizationId: t.organizationId,
+      name: t.name,
+      categoryIds: (t.categories ?? []).map((c) => c.id),
+    };
+  }
+
+  /** Alle IDs muessen existieren und zur Organisation gehoeren. */
+  private async requireCategoriesInOrganization(
+    categoryIds: string[],
+    organizationId: string,
+  ): Promise<CategoryEntity[]> {
+    const categories = await this.findByIds(categoryIds);
+    if (categories.length !== new Set(categoryIds).size) {
+      throw new AppNotFoundException(
+        ErrorCode.CATEGORY_NOT_FOUND,
+        'Mindestens eine Kategorie existiert nicht',
+      );
+    }
+    if (categories.some((c) => c.organizationId !== organizationId)) {
+      throw new AppBadRequestException(
+        ErrorCode.CATEGORY_NOT_IN_YOUR_ORG,
+        'Kategorie gehört nicht zu dieser Organisation',
+      );
+    }
+    return categories;
+  }
+
+  async createTemplate(data: {
+    name: string;
+    organizationId: string;
+    categoryIds: string[];
+  }) {
+    const categories = await this.requireCategoriesInOrganization(
+      data.categoryIds,
+      data.organizationId,
+    );
+    const saved = await this.templateRepo.save(
+      this.templateRepo.create({
+        name: data.name.trim(),
+        organizationId: data.organizationId,
+        categories,
+      }),
+    );
+    return this.toTemplateView(saved);
+  }
+
+  async updateTemplate(
+    id: string,
+    data: { name?: string; categoryIds?: string[] },
+  ) {
+    const template = await this.templateRepo.findOne({
+      where: { id },
+      relations: ['categories'],
+    });
+    if (!template) {
+      throw new AppNotFoundException(
+        ErrorCode.CATEGORY_TEMPLATE_NOT_FOUND,
+        `Category template with ID ${id} not found`,
+        { id },
+      );
+    }
+    if (data.name !== undefined) {
+      template.name = data.name.trim();
+    }
+    if (data.categoryIds !== undefined) {
+      template.categories = await this.requireCategoriesInOrganization(
+        data.categoryIds,
+        template.organizationId,
+      );
+    }
+    return this.toTemplateView(await this.templateRepo.save(template));
+  }
+
+  async deleteTemplate(id: string): Promise<void> {
+    const template = await this.templateRepo.findOne({ where: { id } });
+    if (!template) {
+      throw new AppNotFoundException(
+        ErrorCode.CATEGORY_TEMPLATE_NOT_FOUND,
+        `Category template with ID ${id} not found`,
+        { id },
+      );
+    }
+    await this.templateRepo.remove(template);
+  }
 
   /**
    * Alle Kategorien inkl. Hauptkategorie, sortiert nach Nummer ("1.01" ...).

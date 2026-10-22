@@ -13,6 +13,10 @@ import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { CreateCategoryGroupDto } from './dto/create-category-group.dto';
 import { UpdateCategoryGroupDto } from './dto/update-category-group.dto';
+import {
+  CreateCategoryTemplateDto,
+  UpdateCategoryTemplateDto,
+} from './dto/category-template.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
 import { UserRole, OrganizationRole } from '../auth/enums/user-role.enum';
@@ -203,6 +207,66 @@ export class CategoriesController {
     await this.assertCanManageCategory(user, group);
     await this.categoriesService.deleteGroup(id);
     return { deleted: true };
+  }
+
+  /**
+   * GET /categories/templates
+   * Kategorievorlagen (inkl. Kategorie-IDs) - lesen dürfen alle Mitglieder.
+   */
+  @Get('templates')
+  async getTemplates(
+    @CurrentUser() user: AuthUser,
+    @Query('organizationId') queryOrgId?: string,
+  ) {
+    const organizationIds = await this.resolveOrganizationIds(user, queryOrgId);
+    return this.categoriesService.findTemplates(organizationIds);
+  }
+
+  @Post('templates')
+  async createTemplate(
+    @Body() dto: CreateCategoryTemplateDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const orgId = await this.resolveManagedOrganizationId(
+      user,
+      dto.organizationId,
+    );
+    return this.categoriesService.createTemplate({
+      name: dto.name,
+      organizationId: orgId,
+      categoryIds: dto.categoryIds,
+    });
+  }
+
+  @Put('templates/:id')
+  async updateTemplate(
+    @Param('id') id: string,
+    @Body() dto: UpdateCategoryTemplateDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const template = await this.requireTemplate(id);
+    await this.assertCanManageCategory(user, template);
+    return this.categoriesService.updateTemplate(id, dto);
+  }
+
+  @Delete('templates/:id')
+  async deleteTemplate(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    const template = await this.requireTemplate(id);
+    await this.assertCanManageCategory(user, template);
+    await this.categoriesService.deleteTemplate(id);
+    return { deleted: true };
+  }
+
+  private async requireTemplate(id: string) {
+    const template = await this.categoriesService.findTemplate(id);
+    if (!template) {
+      throw new AppNotFoundException(
+        ErrorCode.CATEGORY_TEMPLATE_NOT_FOUND,
+        `Category template with ID ${id} not found`,
+        { id },
+      );
+    }
+    return template;
   }
 
   private async requireGroup(id: string) {

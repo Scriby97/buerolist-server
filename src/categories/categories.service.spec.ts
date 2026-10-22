@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { CategoriesService } from './categories.service';
 import { CategoryEntity } from './category.entity';
 import { CategoryGroupEntity } from './category-group.entity';
+import { CategoryTemplateEntity } from './category-template.entity';
 import { AppBadRequestException } from '../common/exceptions';
 
 describe('CategoriesService - Hauptkategorien', () => {
@@ -14,12 +15,21 @@ describe('CategoriesService - Hauptkategorien', () => {
     findOne: jest.fn(),
     maximum: jest.fn(),
     count: jest.fn(),
+    find: jest.fn(),
   };
   const groupRepo = {
     create: jest.fn((d) => d),
     save: jest.fn((d) => Promise.resolve({ id: 'group-1', ...d })),
     findOne: jest.fn(),
     maximum: jest.fn(),
+    remove: jest.fn(),
+  };
+
+  const templateRepo = {
+    create: jest.fn((d) => d),
+    save: jest.fn((d) => Promise.resolve({ id: 'tpl-1', ...d })),
+    findOne: jest.fn(),
+    find: jest.fn(),
     remove: jest.fn(),
   };
 
@@ -32,6 +42,10 @@ describe('CategoriesService - Hauptkategorien', () => {
         {
           provide: getRepositoryToken(CategoryGroupEntity),
           useValue: groupRepo,
+        },
+        {
+          provide: getRepositoryToken(CategoryTemplateEntity),
+          useValue: templateRepo,
         },
       ],
     }).compile();
@@ -111,5 +125,51 @@ describe('CategoriesService - Hauptkategorien', () => {
     repo.count.mockResolvedValueOnce(0);
     await service.deleteGroup('g1');
     expect(groupRepo.remove).toHaveBeenCalled();
+  });
+
+  describe('Kategorievorlagen', () => {
+    it('legt eine Vorlage mit Kategorien der eigenen Organisation an', async () => {
+      repo.find.mockResolvedValue([
+        { id: 'a', organizationId: 'org-1' },
+        { id: 'b', organizationId: 'org-1' },
+      ]);
+      const template = await service.createTemplate({
+        name: ' Holzwerkrenovation ',
+        organizationId: 'org-1',
+        categoryIds: ['a', 'b'],
+      });
+      expect(template).toEqual({
+        id: 'tpl-1',
+        organizationId: 'org-1',
+        name: 'Holzwerkrenovation',
+        categoryIds: ['a', 'b'],
+      });
+    });
+
+    it('lehnt Kategorien einer anderen Organisation ab', async () => {
+      repo.find.mockResolvedValue([{ id: 'x', organizationId: 'other-org' }]);
+      await expect(
+        service.createTemplate({
+          name: 'T',
+          organizationId: 'org-1',
+          categoryIds: ['x'],
+        }),
+      ).rejects.toThrow(AppBadRequestException);
+      expect(templateRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('ersetzt beim Bearbeiten die Kategorienauswahl', async () => {
+      templateRepo.findOne.mockResolvedValue({
+        id: 'tpl-1',
+        organizationId: 'org-1',
+        name: 'T',
+        categories: [{ id: 'a' }],
+      });
+      repo.find.mockResolvedValue([{ id: 'b', organizationId: 'org-1' }]);
+      const updated = await service.updateTemplate('tpl-1', {
+        categoryIds: ['b'],
+      });
+      expect(updated.categoryIds).toEqual(['b']);
+    });
   });
 });
