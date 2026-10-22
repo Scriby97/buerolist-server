@@ -11,4 +11,8 @@ export class CreateCategoryDto {
   @IsOptional()
   @IsUUID()
   organizationId?: string;
+
+  // Hauptkategorie, in der die Kategorie angelegt wird.
+  @IsUUID()
+  groupId: string;
 }

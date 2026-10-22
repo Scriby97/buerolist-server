@@ -11,6 +11,8 @@ import {
 import { CategoriesService } from './categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { CreateCategoryGroupDto } from './dto/create-category-group.dto';
+import { UpdateCategoryGroupDto } from './dto/update-category-group.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
 import { UserRole, OrganizationRole } from '../auth/enums/user-role.enum';
@@ -152,7 +154,67 @@ export class CategoriesController {
     return this.categoriesService.create({
       name: dto.name,
       organizationId: orgId,
+      groupId: dto.groupId,
     });
+  }
+
+  /**
+   * GET /categories/groups
+   * Hauptkategorien inkl. ihrer Kategorien - lesen dürfen alle Mitglieder.
+   */
+  @Get('groups')
+  async getGroups(
+    @CurrentUser() user: AuthUser,
+    @Query('organizationId') queryOrgId?: string,
+  ) {
+    const organizationIds = await this.resolveOrganizationIds(user, queryOrgId);
+    return this.categoriesService.findGroups(organizationIds);
+  }
+
+  @Post('groups')
+  async createGroup(
+    @Body() dto: CreateCategoryGroupDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const orgId = await this.resolveManagedOrganizationId(
+      user,
+      dto.organizationId,
+    );
+    return this.categoriesService.createGroup({
+      name: dto.name,
+      organizationId: orgId,
+    });
+  }
+
+  @Put('groups/:id')
+  async updateGroup(
+    @Param('id') id: string,
+    @Body() dto: UpdateCategoryGroupDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const group = await this.requireGroup(id);
+    await this.assertCanManageCategory(user, group);
+    return this.categoriesService.updateGroup(id, dto);
+  }
+
+  @Delete('groups/:id')
+  async deleteGroup(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    const group = await this.requireGroup(id);
+    await this.assertCanManageCategory(user, group);
+    await this.categoriesService.deleteGroup(id);
+    return { deleted: true };
+  }
+
+  private async requireGroup(id: string) {
+    const group = await this.categoriesService.findGroup(id);
+    if (!group) {
+      throw new AppNotFoundException(
+        ErrorCode.CATEGORY_GROUP_NOT_FOUND,
+        `Category group with ID ${id} not found`,
+        { id },
+      );
+    }
+    return group;
   }
 
   @Put(':id')

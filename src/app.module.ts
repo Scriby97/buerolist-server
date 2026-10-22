@@ -10,6 +10,7 @@ import { OrganizationSubscriptionEntity } from './organizations/organization-sub
 import { OrganizationInviteEntity } from './organizations/entities/organization-invite.entity';
 import { CustomerEntity } from './customers/customer.entity';
 import { CategoryEntity } from './categories/category.entity';
+import { CategoryGroupEntity } from './categories/category-group.entity';
 import { ProjectEntity } from './projects/project.entity';
 import { ProjectCategoryEntity } from './project-categories/project-category.entity';
 import { TimeEntryEntity } from './time-entries/time-entry.entity';
@@ -43,6 +44,7 @@ import { NotesModule } from './notes/notes.module';
         OrganizationInviteEntity,
         CustomerEntity,
         CategoryEntity,
+        CategoryGroupEntity,
         ProjectEntity,
         ProjectCategoryEntity,
         TimeEntryEntity,

@@ -92,9 +92,15 @@ export class ProjectsService {
   ): Promise<CategoryEntity[]> {
     const links = await this.projectCategoryRepo.find({
       where: { projectId },
-      relations: ['category'],
+      relations: ['category', 'category.group'],
     });
-    return links.map((l) => l.category);
+    return links
+      .map((l) => l.category)
+      .sort(
+        (a, b) =>
+          (a.group?.number ?? 0) - (b.group?.number ?? 0) ||
+          a.number - b.number,
+      );
   }
 
   /**
