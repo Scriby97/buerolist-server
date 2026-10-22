@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -18,6 +19,8 @@ import { TimeEntryEntity } from './time-entries/time-entry.entity';
 import { TimeEntryItemEntity } from './time-entries/time-entry-item.entity';
 import { NoteEntity } from './notes/note.entity';
 import { NotePhotoEntity } from './notes/note-photo.entity';
+import { EntryReminderEntity } from './notifications/entry-reminder.entity';
+import { PushSubscriptionEntity } from './notifications/push-subscription.entity';
 import { SupabaseModule } from './supabase/supabase.module';
 import { AuthModule } from './auth/auth.module';
 import { OrganizationsModule } from './organizations/organizations.module';
@@ -27,6 +30,7 @@ import { CategoriesModule } from './categories/categories.module';
 import { ProjectsModule } from './projects/projects.module';
 import { TimeEntriesModule } from './time-entries/time-entries.module';
 import { NotesModule } from './notes/notes.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -53,6 +57,8 @@ import { NotesModule } from './notes/notes.module';
         TimeEntryItemEntity,
         NoteEntity,
         NotePhotoEntity,
+        EntryReminderEntity,
+        PushSubscriptionEntity,
       ],
       synchronize: false, // Migrations sind handgeschriebenes SQL, siehe migrations/
       ssl:
@@ -70,6 +76,7 @@ import { NotesModule } from './notes/notes.module';
             : false,
       },
     }),
+    ScheduleModule.forRoot(),
     SupabaseModule,
     AuthModule,
     OrganizationsModule,
@@ -79,6 +86,7 @@ import { NotesModule } from './notes/notes.module';
     ProjectsModule,
     TimeEntriesModule,
     NotesModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
