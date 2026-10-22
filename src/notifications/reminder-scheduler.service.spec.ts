@@ -94,30 +94,29 @@ describe('ReminderSchedulerService.processReminder', () => {
   });
 });
 
-describe('NotificationsService.addSubscription', () => {
-  it('legt beim ersten Geraet die Standard-Erinnerung (aktiv, 17:30) an', async () => {
-    const subscriptions = {
-      findOne: jest.fn().mockResolvedValue(null),
-      create: jest.fn((v: object) => v),
-      save: jest.fn((v: object) => Promise.resolve(v)),
-    };
-    const reminders = {
-      findOne: jest.fn().mockResolvedValue(null),
-      create: jest.fn((v: object) => v),
-      save: jest.fn((v: object) => Promise.resolve(v)),
-    };
+describe('NotificationsService', () => {
+  const repo = () => ({
+    findOne: jest.fn().mockResolvedValue(null),
+    create: jest.fn((v: object) => v),
+    save: jest.fn((v: object) => Promise.resolve(v)),
+  });
+
+  it('liefert ohne gespeicherte Einstellung den Default: aus, 17:30', async () => {
+    const service = new NotificationsService(repo() as never, repo() as never);
+    const reminder = await service.getReminder('u1');
+    expect(reminder).toMatchObject({ enabled: false, reminderTime: '17:30' });
+  });
+
+  it('schaltet beim Registrieren eines Geraets nichts automatisch ein', async () => {
+    const reminders = repo();
     const service = new NotificationsService(
       reminders as never,
-      subscriptions as never,
+      repo() as never,
     );
     await service.addSubscription('u1', {
       endpoint: 'https://push/1',
       keys: { p256dh: 'p', auth: 'a' },
     });
-    expect(reminders.save).toHaveBeenCalledWith({
-      userId: 'u1',
-      enabled: true,
-      reminderTime: '17:30',
-    });
+    expect(reminders.save).not.toHaveBeenCalled();
   });
 });

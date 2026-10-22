@@ -19,8 +19,10 @@ export class NotificationsService {
 
   /**
    * Erinnerungs-Einstellungen des Users. Existiert noch keine, kommt der
-   * (nicht gespeicherte) Default zurueck: aktiv, 17:30 - ohne id, daran
-   * erkennt das Frontend, dass der User noch nie gefragt wurde.
+   * (nicht gespeicherte) Default zurueck: aus, 17:30 - ohne id, daran
+   * erkennt das Frontend, dass der User noch nie gefragt wurde. Eingeschaltet
+   * wird erst, wenn der User zustimmt (NotificationPermissionPrompt bzw.
+   * Einstellungsseite).
    */
   async getReminder(userId: string): Promise<EntryReminderEntity> {
     const existing = await this.reminderRepository.findOne({
@@ -30,7 +32,7 @@ export class NotificationsService {
 
     return this.reminderRepository.create({
       userId,
-      enabled: true,
+      enabled: false,
       reminderTime: DEFAULT_REMINDER_TIME,
       timezone: 'Europe/Zurich',
     });
@@ -52,12 +54,7 @@ export class NotificationsService {
     return this.reminderRepository.save(reminder);
   }
 
-  /**
-   * Registriert die Push-Subscription eines Geraets. Hat der User noch keine
-   * Erinnerungs-Einstellung, wird sie dabei mit dem Default (aktiv, 17:30)
-   * angelegt - die Erinnerung ist also standardmaessig an, sobald der Browser
-   * Benachrichtigungen erlaubt.
-   */
+  /** Registriert die Push-Subscription eines Geraets (bzw. aktualisiert sie). */
   async addSubscription(
     userId: string,
     dto: CreatePushSubscriptionDto,
@@ -65,36 +62,21 @@ export class NotificationsService {
     const existing = await this.subscriptionRepository.findOne({
       where: { endpoint: dto.endpoint },
     });
-    let saved: PushSubscriptionEntity;
     if (existing) {
       existing.userId = userId;
       existing.p256dh = dto.keys.p256dh;
       existing.auth = dto.keys.auth;
-      saved = await this.subscriptionRepository.save(existing);
-    } else {
-      saved = await this.subscriptionRepository.save(
-        this.subscriptionRepository.create({
-          userId,
-          endpoint: dto.endpoint,
-          p256dh: dto.keys.p256dh,
-          auth: dto.keys.auth,
-        }),
-      );
+      return this.subscriptionRepository.save(existing);
     }
 
-    const reminder = await this.reminderRepository.findOne({
-      where: { userId },
-    });
-    if (!reminder) {
-      await this.reminderRepository.save(
-        this.reminderRepository.create({
-          userId,
-          enabled: true,
-          reminderTime: DEFAULT_REMINDER_TIME,
-        }),
-      );
-    }
-    return saved;
+    return this.subscriptionRepository.save(
+      this.subscriptionRepository.create({
+        userId,
+        endpoint: dto.endpoint,
+        p256dh: dto.keys.p256dh,
+        auth: dto.keys.auth,
+      }),
+    );
   }
 
   async removeSubscription(userId: string, endpoint: string): Promise<void> {

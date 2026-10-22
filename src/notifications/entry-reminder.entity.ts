@@ -6,7 +6,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-/** Standard-Erinnerung: aktiv, 17:30 Schweizer Zeit. */
+/** Standard-Erinnerungszeit (Schweizer Zeit); eingeschaltet wird erst auf Zustimmung. */
 export const DEFAULT_REMINDER_TIME = '17:30';
 
 @Entity('entry_reminders')
@@ -17,7 +17,7 @@ export class EntryReminderEntity {
   @Column({ type: 'uuid', unique: true })
   userId: string;
 
-  @Column({ default: true })
+  @Column({ default: false })
   enabled: boolean;
 
   // Format "HH:mm", ausgewertet in Europe/Zurich.
