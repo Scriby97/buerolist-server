@@ -43,7 +43,7 @@ describe('ReminderSchedulerService.processReminder', () => {
       'markSent' | 'getSubscriptionsForUser' | 'removeSubscriptionByEndpoint'
     >
   >;
-  let timeEntries: { findOne: jest.Mock };
+  let timeEntries: { find: jest.Mock };
   let service: ReminderSchedulerService;
 
   beforeEach(() => {
@@ -57,7 +57,7 @@ describe('ReminderSchedulerService.processReminder', () => {
         ]),
       removeSubscriptionByEndpoint: jest.fn().mockResolvedValue(undefined),
     };
-    timeEntries = { findOne: jest.fn().mockResolvedValue(null) };
+    timeEntries = { find: jest.fn().mockResolvedValue([]) };
     service = new ReminderSchedulerService(
       notifications as unknown as NotificationsService,
       timeEntries as never,
@@ -70,11 +70,29 @@ describe('ReminderSchedulerService.processReminder', () => {
     expect(notifications.markSent).toHaveBeenCalledWith('r1');
   });
 
-  it('sendet nichts, wenn heute schon ein Eintrag existiert', async () => {
-    timeEntries.findOne.mockResolvedValue({ id: 'e1' });
-    await service.processReminder(reminder);
+  const entry = (from: string, to: string) => ({
+    startAt: new Date(`2026-10-23T${from}:00Z`),
+    endAt: new Date(`2026-10-23T${to}:00Z`),
+  });
+
+  it('sendet nichts, wenn heute schon ein ganzer Arbeitstag erfasst ist', async () => {
+    timeEntries.find.mockResolvedValue([
+      entry('06:00', '10:00'),
+      entry('11:00', '15:00'),
+    ]);
+    await service.processReminder({ ...reminder, workdayMinutes: 480 });
     expect(webpush.sendNotification).not.toHaveBeenCalled();
     expect(notifications.markSent).toHaveBeenCalledWith('r1');
+  });
+
+  it('erinnert, wenn heute weniger als ein Arbeitstag erfasst ist', async () => {
+    timeEntries.find.mockResolvedValue([entry('06:00', '09:30')]);
+    await service.processReminder({ ...reminder, workdayMinutes: 510 });
+    expect(webpush.sendNotification).toHaveBeenCalledTimes(1);
+    const payload = JSON.parse(
+      (webpush.sendNotification as jest.Mock).mock.calls[0][1] as string,
+    ) as { body: string };
+    expect(payload.body).toContain('3:30 von 8:30');
   });
 
   it('sendet hoechstens einmal pro Tag', async () => {

@@ -1,9 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { MoreThanOrEqual, Repository } from 'typeorm';
+import { Between, Repository } from 'typeorm';
 import * as webpush from 'web-push';
-import { EntryReminderEntity } from './entry-reminder.entity';
+import {
+  DEFAULT_WORKDAY_MINUTES,
+  EntryReminderEntity,
+} from './entry-reminder.entity';
 import { NotificationsService } from './notifications.service';
 import { TimeEntryEntity } from '../time-entries/time-entry.entity';
 import { zurichDateKey } from '../common/utils/work-week.util';
@@ -24,6 +27,11 @@ export function zurichStartOfDay(now: Date = new Date()): Date {
     }).format(new Date(utcMidnight)),
   );
   return new Date(utcMidnight - zurichHour * 60 * 60 * 1000);
+}
+
+/** Minuten als "H:MM" (z.B. 510 -> "8:30"). */
+export function formatHm(minutes: number): string {
+  return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
 }
 
 @Injectable()
@@ -75,6 +83,30 @@ export class ReminderSchedulerService {
     }
   }
 
+  /** Heute (Schweizer Kalendertag) erfasste Minuten eines Users. */
+  async minutesRecordedToday(userId: string, now: Date): Promise<number> {
+    const start = zurichStartOfDay(now);
+    // Naechster Tagesbeginn: 26h spaeter liegt sicher im Folgetag (Sommerzeit)
+    const end = zurichStartOfDay(new Date(start.getTime() + 26 * 3600 * 1000));
+    const entries = await this.timeEntryRepository.find({
+      where: {
+        creatorId: userId,
+        startAt: Between(start, new Date(end.getTime() - 1)),
+      },
+      select: { id: true, startAt: true, endAt: true },
+    });
+    return entries.reduce(
+      (sum, entry) =>
+        sum +
+        Math.round(
+          (new Date(entry.endAt).getTime() -
+            new Date(entry.startAt).getTime()) /
+            60000,
+        ),
+      0,
+    );
+  }
+
   async processReminder(reminder: EntryReminderEntity): Promise<void> {
     const now = new Date();
 
@@ -86,15 +118,13 @@ export class ReminderSchedulerService {
       return;
     }
 
-    // Smarte Erinnerung: wer heute schon etwas erfasst hat, bekommt keine.
-    const todaysEntry = await this.timeEntryRepository.findOne({
-      where: {
-        creatorId: reminder.userId,
-        startAt: MoreThanOrEqual(zurichStartOfDay(now)),
-      },
-      select: { id: true },
-    });
-    if (todaysEntry) {
+    // Smarte Erinnerung: nur, wenn heute weniger als ein Arbeitstag erfasst ist.
+    const workdayMinutes = reminder.workdayMinutes ?? DEFAULT_WORKDAY_MINUTES;
+    const recordedMinutes = await this.minutesRecordedToday(
+      reminder.userId,
+      now,
+    );
+    if (recordedMinutes >= workdayMinutes) {
       await this.notificationsService.markSent(reminder.id);
       return;
     }
@@ -104,7 +134,10 @@ export class ReminderSchedulerService {
 
     const payload = JSON.stringify({
       title: 'Zeiten erfassen',
-      body: 'Vergiss nicht, deine heutigen Einträge zu erfassen.',
+      body:
+        recordedMinutes > 0
+          ? `Du hast heute erst ${formatHm(recordedMinutes)} von ${formatHm(workdayMinutes)} Std. erfasst.`
+          : 'Vergiss nicht, deine heutigen Einträge zu erfassen.',
       url: '/',
     });
 
