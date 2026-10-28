@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
   DEFAULT_REMINDER_TIME,
-  DEFAULT_WORKDAY_MINUTES,
   EntryReminderEntity,
 } from './entry-reminder.entity';
 import { PushSubscriptionEntity } from './push-subscription.entity';
@@ -36,7 +35,6 @@ export class NotificationsService {
       enabled: false,
       reminderTime: DEFAULT_REMINDER_TIME,
       timezone: 'Europe/Zurich',
-      workdayMinutes: DEFAULT_WORKDAY_MINUTES,
     });
   }
 
@@ -44,7 +42,6 @@ export class NotificationsService {
     userId: string,
     enabled: boolean,
     time: string,
-    workdayMinutes?: number,
   ): Promise<EntryReminderEntity> {
     let reminder = await this.reminderRepository.findOne({
       where: { userId },
@@ -54,9 +51,6 @@ export class NotificationsService {
     }
     reminder.enabled = enabled;
     reminder.reminderTime = time;
-    if (workdayMinutes !== undefined) {
-      reminder.workdayMinutes = workdayMinutes;
-    }
     return this.reminderRepository.save(reminder);
   }
 

@@ -3,10 +3,12 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository } from 'typeorm';
 import * as webpush from 'web-push';
+import { EntryReminderEntity } from './entry-reminder.entity';
+import { UserProfileEntity } from '../auth/entities/user-profile.entity';
 import {
-  DEFAULT_WORKDAY_MINUTES,
-  EntryReminderEntity,
-} from './entry-reminder.entity';
+  DEFAULT_WORK_SCHEDULE,
+  workdayMinutes as scheduleMinutes,
+} from '../common/utils/work-schedule.util';
 import { NotificationsService } from './notifications.service';
 import { TimeEntryEntity } from '../time-entries/time-entry.entity';
 import { zurichDateKey } from '../common/utils/work-week.util';
@@ -43,6 +45,8 @@ export class ReminderSchedulerService {
     private readonly notificationsService: NotificationsService,
     @InjectRepository(TimeEntryEntity)
     private readonly timeEntryRepository: Repository<TimeEntryEntity>,
+    @InjectRepository(UserProfileEntity)
+    private readonly profileRepository: Repository<UserProfileEntity>,
   ) {
     const publicKey = process.env.VAPID_PUBLIC_KEY;
     const privateKey = process.env.VAPID_PRIVATE_KEY;
@@ -119,7 +123,11 @@ export class ReminderSchedulerService {
     }
 
     // Smarte Erinnerung: nur, wenn heute weniger als ein Arbeitstag erfasst ist.
-    const workdayMinutes = reminder.workdayMinutes ?? DEFAULT_WORKDAY_MINUTES;
+    // Dauer des normalen Arbeitstags aus den Arbeitszeiten des Mitarbeiters
+    const profile = await this.profileRepository.findOne({
+      where: { id: reminder.userId },
+    });
+    const workdayMinutes = scheduleMinutes(profile ?? DEFAULT_WORK_SCHEDULE);
     const recordedMinutes = await this.minutesRecordedToday(
       reminder.userId,
       now,

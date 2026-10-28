@@ -6,8 +6,10 @@ import {
   Headers,
   Param,
   Patch,
+  Put,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { UpdateWorkScheduleDto } from './dto/update-work-schedule.dto';
 import {
   SignInDto,
   SignUpDto,
@@ -91,6 +93,18 @@ export class AuthController {
   @Get('me')
   getMe(@CurrentUser() user: AuthUser) {
     return this.authService.getUserProfile(user.id);
+  }
+
+  /**
+   * PUT /auth/me/work-schedule
+   * Eigenen normalen Arbeitstag speichern (vier Zeiten "HH:mm").
+   */
+  @Put('me/work-schedule')
+  updateWorkSchedule(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: UpdateWorkScheduleDto,
+  ) {
+    return this.authService.updateWorkSchedule(user.id, dto);
   }
 
   /**

@@ -33,7 +33,6 @@ export class NotificationsController {
       user.id,
       dto.enabled,
       dto.time,
-      dto.workdayMinutes,
     );
   }
 

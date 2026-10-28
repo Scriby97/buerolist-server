@@ -5,6 +5,8 @@ import { SupabaseService } from '../supabase/supabase.service';
 import { UserProfileEntity } from './entities/user-profile.entity';
 import { OrganizationMemberEntity } from '../organizations/organization-member.entity';
 import { UserRole } from './enums/user-role.enum';
+import { UpdateWorkScheduleDto } from './dto/update-work-schedule.dto';
+import { isValidWorkSchedule } from '../common/utils/work-schedule.util';
 import {
   AppBadRequestException,
   AppForbiddenException,
@@ -353,6 +355,26 @@ export class AuthService {
    * sehen, deren Mitgliedschaft archiviert wurde (z.B. nach einem
    * Owner-Self-Delete, siehe OrganizationsService.deleteByOwner).
    */
+  /** Normaler Arbeitstag des eingeloggten Users speichern. */
+  async updateWorkSchedule(userId: string, dto: UpdateWorkScheduleDto) {
+    if (!isValidWorkSchedule(dto)) {
+      throw new AppBadRequestException(
+        ErrorCode.WORK_SCHEDULE_INVALID,
+        'Die Zeiten müssen aufsteigend sein (Vormittag von < bis <= Nachmittag von < bis)',
+      );
+    }
+    await this.profileRepo.update(
+      { id: userId },
+      {
+        workMorningStart: dto.workMorningStart,
+        workMorningEnd: dto.workMorningEnd,
+        workAfternoonStart: dto.workAfternoonStart,
+        workAfternoonEnd: dto.workAfternoonEnd,
+      },
+    );
+    return this.getUserProfile(userId);
+  }
+
   async getUserProfile(userId: string) {
     const profile = await this.profileRepo.findOne({ where: { id: userId } });
     if (!profile) return null;

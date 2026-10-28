@@ -36,6 +36,20 @@ export class UserProfileEntity {
   @Column({ nullable: true })
   lastName?: string;
 
+  // Normaler Arbeitstag (migrations/013) - Startzeit-Vorschlag beim Erfassen
+  // und Dauer fuer die Erfassungserinnerung.
+  @Column({ type: 'varchar', length: 5, default: '07:15' })
+  workMorningStart!: string;
+
+  @Column({ type: 'varchar', length: 5, default: '12:00' })
+  workMorningEnd!: string;
+
+  @Column({ type: 'varchar', length: 5, default: '13:00' })
+  workAfternoonStart!: string;
+
+  @Column({ type: 'varchar', length: 5, default: '17:00' })
+  workAfternoonEnd!: string;
+
   @CreateDateColumn()
   createdAt!: Date;
 
