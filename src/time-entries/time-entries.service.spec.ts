@@ -52,6 +52,34 @@ describe('TimeEntriesService', () => {
     service = module.get<TimeEntriesService>(TimeEntriesService);
   });
 
+  describe('createForCreators', () => {
+    const data = {
+      projectId: 'project-1',
+      startAt: new Date('2026-01-01T08:00:00Z'),
+      endAt: new Date('2026-01-01T10:00:00Z'),
+    };
+
+    it('legt nichts an, wenn sich der Eintrag bei einer Person überschneidet, und nennt sie', async () => {
+      repo.findOne.mockImplementation(
+        ({ where }: { where: { creatorId: string } }) =>
+          Promise.resolve(
+            where.creatorId === 'user-2'
+              ? { id: 'x', creator: { firstName: 'Max', lastName: 'Muster' } }
+              : null,
+          ),
+      );
+      const error = await service
+        .createForCreators(data, ['user-1', 'user-2'])
+        .catch((e: AppBadRequestException) => e);
+      expect(error).toBeInstanceOf(AppBadRequestException);
+      expect((error as AppBadRequestException).getResponse()).toMatchObject({
+        code: 'TIME_ENTRY_OVERLAP_FOR',
+        params: { name: 'Max Muster' },
+      });
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+  });
+
   describe('create', () => {
     const baseData = {
       projectId: 'project-1',

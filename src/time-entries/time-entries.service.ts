@@ -315,6 +315,45 @@ export class TimeEntriesService {
     }
   }
 
+  /**
+   * Gleicher Eintrag fuer mehrere Mitarbeiter. Prueft zuerst fuer alle auf
+   * Ueberschneidungen (und nennt die betroffene Person), legt erst danach an -
+   * so entsteht bei einem Konflikt kein halber Satz Eintraege.
+   */
+  async createForCreators(
+    data: Omit<Parameters<TimeEntriesService['create']>[0], 'creatorId'>,
+    creatorIds: string[],
+  ): Promise<(TimeEntryEntity & { items: TimeEntryItemView[] })[]> {
+    for (const creatorId of creatorIds) {
+      const overlapping = await this.repo.findOne({
+        where: {
+          creatorId,
+          startAt: LessThan(data.endAt),
+          endAt: MoreThan(data.startAt),
+        },
+        relations: ['creator'],
+      });
+      if (overlapping) {
+        const name =
+          [overlapping.creator?.firstName, overlapping.creator?.lastName]
+            .filter(Boolean)
+            .join(' ') ||
+          overlapping.creator?.email ||
+          '?';
+        throw new AppBadRequestException(
+          ErrorCode.TIME_ENTRY_OVERLAP_FOR,
+          `Für ${name} ist in diesem Zeitraum bereits ein Zeiteintrag erfasst`,
+          { name },
+        );
+      }
+    }
+    const created: (TimeEntryEntity & { items: TimeEntryItemView[] })[] = [];
+    for (const creatorId of creatorIds) {
+      created.push(await this.create({ ...data, creatorId }));
+    }
+    return created;
+  }
+
   private overlapException(): AppBadRequestException {
     return new AppBadRequestException(
       ErrorCode.TIME_ENTRY_OVERLAP,

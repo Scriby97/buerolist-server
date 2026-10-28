@@ -156,9 +156,13 @@ export class TimeEntriesController {
    */
   @Post()
   async create(@Body() dto: CreateTimeEntryDto, @CurrentUser() user: AuthUser) {
-    // Admin/Owner duerfen fuer andere Mitglieder (auch ohne Login) erfassen
-    const creatorId = dto.creatorId ?? user.id;
-    const forSomeoneElse = creatorId !== user.id;
+    // Admin/Owner duerfen fuer andere Mitglieder (auch ohne Login) erfassen,
+    // auch fuer mehrere auf einmal (creatorIds).
+    const creatorIds = dto.creatorIds?.length
+      ? [...new Set(dto.creatorIds)]
+      : [dto.creatorId ?? user.id];
+    const others = creatorIds.filter((id) => id !== user.id);
+    const forSomeoneElse = others.length > 0;
 
     if (user.role !== UserRole.ADMINISTRATOR) {
       const organizationId = await this.assertProjectInUsersOrganization(
@@ -176,7 +180,9 @@ export class TimeEntriesController {
             'Nur Admins oder Owner dürfen Zeiten für andere erfassen',
           );
         }
-        await this.assertMemberOfOrganization(creatorId, organizationId);
+        for (const id of others) {
+          await this.assertMemberOfOrganization(id, organizationId);
+        }
       }
       if (!isInCurrentWorkWeek(new Date(dto.startAt)) && !isManager) {
         throw new AppForbiddenException(
@@ -187,23 +193,29 @@ export class TimeEntriesController {
     } else if (forSomeoneElse) {
       const project = await this.projectsService.findOne(dto.projectId);
       if (project) {
-        await this.assertMemberOfOrganization(
-          creatorId,
-          project.organizationId,
-        );
+        for (const id of others) {
+          await this.assertMemberOfOrganization(id, project.organizationId);
+        }
       }
     }
 
-    return this.timeEntriesService.create({
+    const data = {
       projectId: dto.projectId,
       categoryId: dto.categoryId ?? null,
-      creatorId,
       createdById: user.id,
       startAt: new Date(dto.startAt),
       endAt: new Date(dto.endAt),
       comment: dto.comment,
       travelMinutes: dto.travelMinutes,
       items: dto.items,
+    };
+    // Mehrere Mitarbeiter: Liste zurueck; sonst wie bisher ein einzelner Eintrag
+    if (dto.creatorIds?.length) {
+      return this.timeEntriesService.createForCreators(data, creatorIds);
+    }
+    return this.timeEntriesService.create({
+      ...data,
+      creatorId: creatorIds[0],
     });
   }
 

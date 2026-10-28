@@ -15,6 +15,7 @@ import { Type } from 'class-transformer';
 import { TIME_ENTRY_MAX_ITEMS, TimeEntryItemDto } from './time-entry-item.dto';
 
 export const TIME_ENTRY_COMMENT_MAX_LENGTH = 1000;
+export const TIME_ENTRY_MAX_CREATORS = 50;
 
 export class CreateTimeEntryDto {
   @IsUUID()
@@ -24,6 +25,15 @@ export class CreateTimeEntryDto {
   @IsOptional()
   @IsUUID()
   creatorId?: string;
+
+  // Gleichen Eintrag fuer mehrere Mitarbeiter anlegen (ersetzt creatorId).
+  // Alles oder nichts: ueberschneidet er sich bei einer Person, wird keiner
+  // gespeichert.
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(TIME_ENTRY_MAX_CREATORS)
+  @IsUUID('all', { each: true })
+  creatorIds?: string[];
 
   @IsOptional()
   @IsUUID()

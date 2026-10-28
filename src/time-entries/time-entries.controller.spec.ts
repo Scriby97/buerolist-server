@@ -353,3 +353,59 @@ describe('TimeEntriesController - Fahrzeit', () => {
     );
   });
 });
+
+describe('TimeEntriesController - mehrere Mitarbeiter auf einmal', () => {
+  const create = jest.fn().mockResolvedValue({});
+  const createForCreators = jest.fn().mockResolvedValue([]);
+  const membersService = {
+    getOrganizationIds: jest.fn().mockResolvedValue(['org-1']),
+    findMembership: jest.fn(),
+  };
+  const projectsService = {
+    findOne: jest.fn().mockResolvedValue({ id: 'p1', organizationId: 'org-1' }),
+  };
+  const controller = new TimeEntriesController(
+    { create, createForCreators } as unknown as TimeEntriesService,
+    projectsService as unknown as ProjectsService,
+    membersService as unknown as OrganizationMembersService,
+  );
+  const me = { id: 'me', role: UserRole.USER } as unknown as AuthUser;
+  const dto = (creatorIds: string[]) => ({
+    projectId: 'p1',
+    creatorIds,
+    startAt: '2026-10-20T07:00:00+02:00',
+    endAt: '2026-10-20T09:00:00+02:00',
+  });
+
+  beforeAll(() => {
+    jest.useFakeTimers({ now: new Date('2026-10-21T10:00:00+02:00') });
+  });
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+  beforeEach(() => jest.clearAllMocks());
+
+  it('Admin/Owner erfasst für sich und weitere Mitarbeiter (ohne Duplikate)', async () => {
+    membersService.findMembership.mockImplementation((userId: string) =>
+      Promise.resolve({
+        role:
+          userId === 'me' ? OrganizationRole.OWNER : OrganizationRole.EMPLOYEE,
+      }),
+    );
+    await controller.create(dto(['me', 'a', 'b', 'a']), me);
+    expect(createForCreators).toHaveBeenCalledWith(
+      expect.objectContaining({ createdById: 'me' }),
+      ['me', 'a', 'b'],
+    );
+  });
+
+  it('Mitarbeiter dürfen nicht für andere miterfassen', async () => {
+    membersService.findMembership.mockResolvedValue({
+      role: OrganizationRole.EMPLOYEE,
+    });
+    await expect(controller.create(dto(['me', 'a']), me)).rejects.toThrow(
+      AppForbiddenException,
+    );
+    expect(createForCreators).not.toHaveBeenCalled();
+  });
+});
