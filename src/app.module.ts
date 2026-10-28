@@ -31,6 +31,8 @@ import { ProjectsModule } from './projects/projects.module';
 import { TimeEntriesModule } from './time-entries/time-entries.module';
 import { NotesModule } from './notes/notes.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { ItemPresetsModule } from './item-presets/item-presets.module';
+import { ItemPresetEntity } from './item-presets/item-preset.entity';
 
 @Module({
   imports: [
@@ -59,6 +61,7 @@ import { NotificationsModule } from './notifications/notifications.module';
         NotePhotoEntity,
         EntryReminderEntity,
         PushSubscriptionEntity,
+        ItemPresetEntity,
       ],
       synchronize: false, // Migrations sind handgeschriebenes SQL, siehe migrations/
       ssl:
@@ -87,6 +90,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     TimeEntriesModule,
     NotesModule,
     NotificationsModule,
+    ItemPresetsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
