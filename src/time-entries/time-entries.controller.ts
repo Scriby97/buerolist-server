@@ -202,6 +202,7 @@ export class TimeEntriesController {
       startAt: new Date(dto.startAt),
       endAt: new Date(dto.endAt),
       comment: dto.comment,
+      travelMinutes: dto.travelMinutes,
       items: dto.items,
     });
   }
@@ -226,6 +227,7 @@ export class TimeEntriesController {
       startAt: dto.startAt ? new Date(dto.startAt) : undefined,
       endAt: dto.endAt ? new Date(dto.endAt) : undefined,
       comment: dto.comment,
+      travelMinutes: dto.travelMinutes,
       items: dto.items,
     });
   }

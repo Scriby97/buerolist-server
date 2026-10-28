@@ -22,6 +22,12 @@ export interface ProjectCostSummaryRow {
   totalRappen: number;
 }
 
+/** Summe Fahrzeit eines Mitarbeiters auf einem Projekt. */
+export interface ProjectTravelSummaryRow {
+  creatorId: string;
+  totalMinutes: number;
+}
+
 export interface ProjectTimeSummaryRow {
   creatorId: string;
   creatorFirstName: string | null;
@@ -113,6 +119,7 @@ export class ProjectsService {
     notes: NoteEntity[];
     timeSummary: ProjectTimeSummaryRow[];
     costSummary: ProjectCostSummaryRow[];
+    travelSummary: ProjectTravelSummaryRow[];
   } | null> {
     const project = await this.repo.findOne({
       where: { id },
@@ -122,18 +129,27 @@ export class ProjectsService {
       return null;
     }
 
-    const [categories, notes, timeSummary, costSummary] = await Promise.all([
-      this.loadCategoriesForProject(id),
-      this.noteRepo.find({
-        where: { projectId: id },
-        relations: ['photos'],
-        order: { createdAt: 'DESC' },
-      }),
-      this.timeSummary(id),
-      this.costSummary(id),
-    ]);
+    const [categories, notes, timeSummary, costSummary, travelSummary] =
+      await Promise.all([
+        this.loadCategoriesForProject(id),
+        this.noteRepo.find({
+          where: { projectId: id },
+          relations: ['photos'],
+          order: { createdAt: 'DESC' },
+        }),
+        this.timeSummary(id),
+        this.costSummary(id),
+        this.travelSummary(id),
+      ]);
 
-    return { project, categories, notes, timeSummary, costSummary };
+    return {
+      project,
+      categories,
+      notes,
+      timeSummary,
+      costSummary,
+      travelSummary,
+    };
   }
 
   /**
@@ -173,6 +189,23 @@ export class ProjectsService {
 
     return raw.map((r) => ({
       ...r,
+      totalMinutes: Math.round(Number(r.totalMinutes) || 0),
+    }));
+  }
+
+  /** Fahrzeit eines Projekts, summiert pro Mitarbeiter (nur wo erfasst). */
+  async travelSummary(projectId: string): Promise<ProjectTravelSummaryRow[]> {
+    const raw = await this.timeEntryRepo
+      .createQueryBuilder('t')
+      .select('t.creatorId', 'creatorId')
+      .addSelect('COALESCE(SUM(t."travelMinutes"), 0)', 'totalMinutes')
+      .where('t.projectId = :projectId', { projectId })
+      .andWhere('t."travelMinutes" > 0')
+      .groupBy('t.creatorId')
+      .getRawMany<{ creatorId: string; totalMinutes: string }>();
+
+    return raw.map((r) => ({
+      creatorId: r.creatorId,
       totalMinutes: Math.round(Number(r.totalMinutes) || 0),
     }));
   }

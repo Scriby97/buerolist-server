@@ -51,6 +51,8 @@ export interface TimeEntryWithProject {
   startAt: Date;
   endAt: Date;
   comment: string | null;
+  /** Fahrzeit in Minuten (null = keine) */
+  travelMinutes: number | null;
   items: TimeEntryItemView[];
   project: {
     id: string;
@@ -215,6 +217,7 @@ export class TimeEntriesService {
       startAt: t.startAt,
       endAt: t.endAt,
       comment: t.comment ?? null,
+      travelMinutes: t.travelMinutes ?? null,
       items: itemsByEntry.get(t.id) ?? [],
       project: {
         id: t.project.id,
@@ -345,6 +348,7 @@ export class TimeEntriesService {
     startAt: Date;
     endAt: Date;
     comment?: string | null;
+    travelMinutes?: number | null;
     items?: TimeEntryItemInput[];
   }): Promise<TimeEntryEntity & { items: TimeEntryItemView[] }> {
     const project = await this.projectRepo.findOne({
@@ -369,6 +373,7 @@ export class TimeEntriesService {
     const { items, ...entryData } = data;
     const entry = this.repo.create({
       ...entryData,
+      travelMinutes: data.travelMinutes || null,
       comment: normalizeComment(data.comment),
     } as DeepPartial<TimeEntryEntity>);
     const saved = await this.saveChecked(entry);
@@ -385,6 +390,7 @@ export class TimeEntriesService {
       startAt?: Date;
       endAt?: Date;
       comment?: string | null;
+      travelMinutes?: number | null;
       items?: TimeEntryItemInput[];
     },
   ): Promise<TimeEntryEntity & { items: TimeEntryItemView[] }> {
@@ -420,6 +426,9 @@ export class TimeEntriesService {
     entry.categoryId = nextCategoryId;
     if (data.comment !== undefined) {
       entry.comment = normalizeComment(data.comment);
+    }
+    if (data.travelMinutes !== undefined) {
+      entry.travelMinutes = data.travelMinutes || null;
     }
     const saved = await this.saveChecked(entry);
     const items =

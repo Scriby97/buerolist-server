@@ -1,4 +1,7 @@
 import {
+  IsInt,
+  Max,
+  Min,
   IsDateString,
   IsOptional,
   IsString,
@@ -24,6 +27,13 @@ export class UpdateTimeEntryDto {
   @IsOptional()
   @IsDateString()
   endAt?: string;
+
+  // Fahrzeit in Minuten (0-1440); null entfernt sie, weglassen laesst sie unveraendert.
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1440)
+  travelMinutes?: number | null;
 
   // null oder '' entfernt die Bemerkung, weglassen laesst sie unveraendert.
   @IsOptional()

@@ -317,3 +317,39 @@ describe('TimeEntriesController - für andere erfassen', () => {
     expect(update).not.toHaveBeenCalled();
   });
 });
+
+describe('TimeEntriesController - Fahrzeit', () => {
+  const create = jest.fn().mockResolvedValue({});
+  const update = jest.fn().mockResolvedValue({});
+  const controller = new TimeEntriesController(
+    { create, update } as unknown as TimeEntriesService,
+    {} as ProjectsService,
+    {} as OrganizationMembersService,
+  );
+  // Globaler Administrator: keine Org-/Wochenpruefung, nur Durchreichen
+  const admin = {
+    id: 'me',
+    role: UserRole.ADMINISTRATOR,
+  } as unknown as AuthUser;
+
+  it('reicht die Fahrzeit beim Erfassen und Bearbeiten durch', async () => {
+    await controller.create(
+      {
+        projectId: 'p1',
+        startAt: '2026-10-20T07:00:00+02:00',
+        endAt: '2026-10-20T09:00:00+02:00',
+        travelMinutes: 75,
+      },
+      admin,
+    );
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ travelMinutes: 75 }),
+    );
+
+    await controller.update('e1', { travelMinutes: null }, admin);
+    expect(update).toHaveBeenCalledWith(
+      'e1',
+      expect.objectContaining({ travelMinutes: null }),
+    );
+  });
+});

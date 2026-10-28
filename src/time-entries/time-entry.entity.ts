@@ -57,6 +57,11 @@ export class TimeEntryEntity {
   @Column({ type: 'timestamp' })
   endAt: Date;
 
+  // Fahrzeit in Minuten (Eingabe als Dezimalstunden) - zaehlt nicht zur
+  // Arbeitszeit, sondern wird separat summiert (migrations/012).
+  @Column({ type: 'int', nullable: true })
+  travelMinutes?: number | null;
+
   // Freitext-Bemerkung zum Eintrag (z.B. "Material abgeholt"), optional.
   @Column({ type: 'text', nullable: true })
   comment?: string | null;

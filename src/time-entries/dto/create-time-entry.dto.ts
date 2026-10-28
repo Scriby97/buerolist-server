@@ -1,4 +1,7 @@
 import {
+  IsInt,
+  Max,
+  Min,
   IsDateString,
   IsOptional,
   IsString,
@@ -31,6 +34,13 @@ export class CreateTimeEntryDto {
 
   @IsDateString()
   endAt: string;
+
+  // Fahrzeit in Minuten (0-1440); null entfernt sie, weglassen laesst sie unveraendert.
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1440)
+  travelMinutes?: number | null;
 
   @IsOptional()
   @IsString()
