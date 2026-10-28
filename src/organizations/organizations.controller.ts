@@ -22,6 +22,7 @@ import { CreateSelfServiceOrganizationDto } from './dto/create-self-service-orga
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { UpdateOrganizationProfileDto } from './dto/update-organization-profile.dto';
 import { CreateInviteDto } from './dto/create-invite.dto';
+import { CreatePlaceholderMemberDto } from './dto/create-placeholder-member.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { TransferOwnershipDto } from './dto/transfer-ownership.dto';
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
@@ -45,6 +46,7 @@ import { StripeService } from '../billing/stripe.service';
 import {
   AppBadRequestException,
   AppForbiddenException,
+  AppNotFoundException,
   ErrorCode,
 } from '../common/exceptions';
 
@@ -224,7 +226,24 @@ export class OrganizationsController {
       user,
       queryOrgId || createInviteDto.organizationId,
     );
-    await this.assertMemberLimitNotExceeded(targetOrgId);
+    if (createInviteDto.placeholderUserId) {
+      // Uebergabe eines Mitarbeiters ohne Login - zaehlt nicht neu zum Limit
+      const placeholder = await this.membersService.findMembership(
+        createInviteDto.placeholderUserId,
+        targetOrgId,
+      );
+      const profile = placeholder
+        ? await this.membersService.findUser(placeholder.userId)
+        : null;
+      if (!profile?.isPlaceholder) {
+        throw new AppNotFoundException(
+          ErrorCode.PLACEHOLDER_NOT_FOUND,
+          'Mitarbeiter ohne Login nicht gefunden',
+        );
+      }
+    } else {
+      await this.assertMemberLimitNotExceeded(targetOrgId);
+    }
 
     return this.invitesService.createInvite(
       targetOrgId,
@@ -311,6 +330,26 @@ export class OrganizationsController {
   @UseGuards(OrganizationGuard)
   getOrganizationMembers(@Param('organizationId') organizationId: string) {
     return this.membersService.findByOrganization(organizationId);
+  }
+
+  /**
+   * POST /organizations/:organizationId/placeholder-members
+   * Mitarbeiter ohne Login anlegen (nur Admin/Owner). Zaehlt zum
+   * Mitglieder-Limit des Tarifs.
+   */
+  @Post(':organizationId/placeholder-members')
+  @UseGuards(OrganizationGuard, OrganizationRolesGuard)
+  @OrganizationRoles(OrganizationRole.ADMIN)
+  async createPlaceholderMember(
+    @Param('organizationId') organizationId: string,
+    @Body() dto: CreatePlaceholderMemberDto,
+  ) {
+    await this.assertMemberLimitNotExceeded(organizationId);
+    return this.membersService.createPlaceholder(
+      organizationId,
+      dto.firstName,
+      dto.lastName,
+    );
   }
 
   /**

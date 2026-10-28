@@ -156,18 +156,40 @@ export class TimeEntriesController {
    */
   @Post()
   async create(@Body() dto: CreateTimeEntryDto, @CurrentUser() user: AuthUser) {
+    // Admin/Owner duerfen fuer andere Mitglieder (auch ohne Login) erfassen
+    const creatorId = dto.creatorId ?? user.id;
+    const forSomeoneElse = creatorId !== user.id;
+
     if (user.role !== UserRole.ADMINISTRATOR) {
       const organizationId = await this.assertProjectInUsersOrganization(
         dto.projectId,
         user,
       );
-      if (
-        !isInCurrentWorkWeek(new Date(dto.startAt)) &&
-        !(await this.isOrganizationManager(user.id, organizationId))
-      ) {
+      const isManager = await this.isOrganizationManager(
+        user.id,
+        organizationId,
+      );
+      if (forSomeoneElse) {
+        if (!isManager) {
+          throw new AppForbiddenException(
+            ErrorCode.TIME_ENTRY_FOR_OTHERS_FORBIDDEN,
+            'Nur Admins oder Owner dürfen Zeiten für andere erfassen',
+          );
+        }
+        await this.assertMemberOfOrganization(creatorId, organizationId);
+      }
+      if (!isInCurrentWorkWeek(new Date(dto.startAt)) && !isManager) {
         throw new AppForbiddenException(
           ErrorCode.TIME_ENTRY_LOCKED,
           'Zeiten für frühere Wochen können nur noch von Admins erfasst werden',
+        );
+      }
+    } else if (forSomeoneElse) {
+      const project = await this.projectsService.findOne(dto.projectId);
+      if (project) {
+        await this.assertMemberOfOrganization(
+          creatorId,
+          project.organizationId,
         );
       }
     }
@@ -175,7 +197,8 @@ export class TimeEntriesController {
     return this.timeEntriesService.create({
       projectId: dto.projectId,
       categoryId: dto.categoryId ?? null,
-      creatorId: user.id,
+      creatorId,
+      createdById: user.id,
       startAt: new Date(dto.startAt),
       endAt: new Date(dto.endAt),
       comment: dto.comment,
@@ -246,6 +269,22 @@ export class TimeEntriesController {
     return project.organizationId;
   }
 
+  private async assertMemberOfOrganization(
+    userId: string,
+    organizationId: string,
+  ): Promise<void> {
+    const membership = await this.membersService.findMembership(
+      userId,
+      organizationId,
+    );
+    if (!membership) {
+      throw new AppForbiddenException(
+        ErrorCode.TIME_ENTRY_TARGET_NOT_MEMBER,
+        'Diese Person ist kein Mitglied der Organisation',
+      );
+    }
+  }
+
   private async isOrganizationManager(
     userId: string,
     organizationId: string,
@@ -263,7 +302,8 @@ export class TimeEntriesController {
   /**
    * Bearbeiten/Löschen eines Zeiteintrags:
    * - Admin/Owner der Organisation: immer.
-   * - Mitarbeiter: nur eigene Einträge und nur in der laufenden Woche (ab
+   * - Mitarbeiter: nur eigene, selbst erfasste Einträge (nicht die, die ein
+   *   Admin/Owner für sie erfasst hat) und nur in der laufenden Woche (ab
    *   Montag 00:00 Schweizer Zeit) - ältere sind für sie gesperrt. Beim
    *   Bearbeiten darf auch die neue Startzeit nicht in eine frühere Woche fallen.
    */
@@ -298,6 +338,14 @@ export class TimeEntriesController {
             ErrorCode.TIME_ENTRY_DELETE_FORBIDDEN,
             'Nur Organisations-Admins oder -Owner dürfen fremde Zeiteinträge löschen',
           );
+    }
+
+    // Vom Chef fuer den Mitarbeiter erfasste Eintraege kann er nicht aendern
+    if (entry.createdById && entry.createdById !== entry.creatorId) {
+      throw new AppForbiddenException(
+        ErrorCode.TIME_ENTRY_CREATED_BY_MANAGER,
+        'Dieser Eintrag wurde von einem Admin erfasst und kann nur von Admins geändert werden',
+      );
     }
 
     const movesIntoPastWeek =

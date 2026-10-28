@@ -17,6 +17,11 @@ export class CreateTimeEntryDto {
   @IsUUID()
   projectId: string;
 
+  // Fuer wen erfasst wird (nur Admin/Owner; fehlt = fuer sich selbst)
+  @IsOptional()
+  @IsUUID()
+  creatorId?: string;
+
   @IsOptional()
   @IsUUID()
   categoryId?: string;

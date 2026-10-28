@@ -6,6 +6,7 @@ import { UserProfileEntity } from './entities/user-profile.entity';
 import { OrganizationMemberEntity } from '../organizations/organization-member.entity';
 import { UserRole } from './enums/user-role.enum';
 import {
+  AppBadRequestException,
   AppForbiddenException,
   AppUnauthorizedException,
   ErrorCode,
@@ -287,6 +288,14 @@ export class AuthService {
       throw new AppForbiddenException(
         ErrorCode.AUTH_RESET_PASSWORD_FORBIDDEN,
         'Nur Administratoren dürfen Passwort-Resets durchführen',
+      );
+    }
+
+    // Mitarbeiter ohne Login haben kein Passwort (und keine E-Mail)
+    if (!targetProfile.email) {
+      throw new AppBadRequestException(
+        ErrorCode.MEMBER_IS_PLACEHOLDER,
+        'Dieser Mitarbeiter hat kein Login',
       );
     }
 

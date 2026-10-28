@@ -137,6 +137,8 @@ export class InvitesController {
         invite.organizationId,
         invite.role,
       );
+      // Mitarbeiter ohne Login: bisher fuer ihn erfasste Zeiten uebernehmen
+      await this.invitesService.transferPlaceholder(invite, result.user.id);
       this.logger.log(
         `Organization membership created with role: ${invite.role}`,
       );

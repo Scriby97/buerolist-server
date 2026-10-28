@@ -235,3 +235,85 @@ describe('TimeEntriesController.create - keine Nachträge für frühere Wochen',
     expect(create).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('TimeEntriesController - für andere erfassen', () => {
+  const create = jest.fn().mockResolvedValue({});
+  const findOne = jest.fn();
+  const update = jest.fn().mockResolvedValue({});
+  const membersService = {
+    getOrganizationIds: jest.fn().mockResolvedValue(['org-1']),
+    findMembership: jest.fn(),
+  };
+  const projectsService = {
+    findOne: jest.fn().mockResolvedValue({ id: 'p1', organizationId: 'org-1' }),
+  };
+  const controller = new TimeEntriesController(
+    { create, findOne, update } as unknown as TimeEntriesService,
+    projectsService as unknown as ProjectsService,
+    membersService as unknown as OrganizationMembersService,
+  );
+  const me = { id: 'me', role: UserRole.USER } as unknown as AuthUser;
+  const dto = {
+    projectId: 'p1',
+    creatorId: 'worker',
+    startAt: '2026-10-20T07:00:00+02:00',
+    endAt: '2026-10-20T09:00:00+02:00',
+  };
+  // Rollen pro User: me = Aufrufer, worker = Ziel
+  const roles = (meRole: OrganizationRole, workerIsMember = true) =>
+    membersService.findMembership.mockImplementation((userId: string) =>
+      Promise.resolve(
+        userId === 'me'
+          ? { role: meRole }
+          : workerIsMember
+            ? { role: OrganizationRole.EMPLOYEE }
+            : null,
+      ),
+    );
+
+  beforeAll(() => {
+    jest.useFakeTimers({ now: new Date('2026-10-21T10:00:00+02:00') });
+  });
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+  beforeEach(() => jest.clearAllMocks());
+
+  it('Admin/Owner erfasst für einen Mitarbeiter und wird als Erfasser gespeichert', async () => {
+    roles(OrganizationRole.ADMIN);
+    await controller.create(dto, me);
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ creatorId: 'worker', createdById: 'me' }),
+    );
+  });
+
+  it('Mitarbeiter darf nicht für andere erfassen', async () => {
+    roles(OrganizationRole.EMPLOYEE);
+    await expect(controller.create(dto, me)).rejects.toThrow(
+      AppForbiddenException,
+    );
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('nur für Mitglieder der Organisation', async () => {
+    roles(OrganizationRole.OWNER, false);
+    await expect(controller.create(dto, me)).rejects.toThrow(
+      AppForbiddenException,
+    );
+  });
+
+  it('Mitarbeiter kann vom Chef erfasste Einträge nicht ändern', async () => {
+    roles(OrganizationRole.EMPLOYEE);
+    findOne.mockResolvedValue({
+      id: 'e1',
+      creatorId: 'me',
+      createdById: 'boss',
+      startAt: new Date('2026-10-20T07:00:00+02:00'),
+      project: { organizationId: 'org-1' },
+    });
+    await expect(controller.update('e1', { comment: 'x' }, me)).rejects.toThrow(
+      AppForbiddenException,
+    );
+    expect(update).not.toHaveBeenCalled();
+  });
+});

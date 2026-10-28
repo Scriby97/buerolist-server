@@ -42,6 +42,11 @@ export class OrganizationInviteEntity {
   @Column({ type: 'uuid', nullable: true })
   usedBy?: string; // User ID der den Invite verwendet hat
 
+  // Mitarbeiter ohne Login, der mit dieser Einladung uebergeben wird - beim
+  // Annehmen gehen seine Eintraege an das echte Konto ueber.
+  @Column({ type: 'uuid', nullable: true })
+  placeholderUserId?: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }

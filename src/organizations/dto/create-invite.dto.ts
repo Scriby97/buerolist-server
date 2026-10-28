@@ -12,4 +12,9 @@ export class CreateInviteDto {
   @IsEnum(OrganizationRole)
   @IsOptional()
   role?: OrganizationRole; // Default: employee
+
+  // Mitarbeiter ohne Login, der mit dieser Einladung uebergeben wird
+  @IsUUID()
+  @IsOptional()
+  placeholderUserId?: string;
 }

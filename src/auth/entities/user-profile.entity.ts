@@ -14,8 +14,13 @@ export class UserProfileEntity {
   @PrimaryColumn('uuid')
   id!: string; // Gleiche ID wie Supabase Auth User
 
-  @Column({ unique: true })
-  email!: string;
+  // Fehlt bei Mitarbeitern ohne Login (isPlaceholder) - siehe migrations/011.
+  @Column({ type: 'varchar', unique: true, nullable: true })
+  email!: string | null;
+
+  /** Mitarbeiter ohne Login, von Admin/Owner angelegt (kein Supabase-Auth-User) */
+  @Column({ default: false })
+  isPlaceholder!: boolean;
 
   // type: 'varchar' explizit, damit sich am SQL-Spaltentyp nichts ändert -
   // nur der TS-Typ wird auf UserRole verschärft (statt string).

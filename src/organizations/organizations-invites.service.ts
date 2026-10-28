@@ -6,6 +6,8 @@ import { OrganizationEntity } from './organization.entity';
 import { OrganizationMemberEntity } from './organization-member.entity';
 import { CreateInviteDto } from './dto/create-invite.dto';
 import { UserRole, OrganizationRole } from '../auth/enums/user-role.enum';
+import { UserProfileEntity } from '../auth/entities/user-profile.entity';
+import { TimeEntryEntity } from '../time-entries/time-entry.entity';
 import { randomBytes } from 'crypto';
 import {
   AppBadRequestException,
@@ -90,6 +92,7 @@ export class OrganizationsInvitesService {
       role: createInviteDto.role || OrganizationRole.EMPLOYEE,
       invitedBy,
       expiresAt,
+      placeholderUserId: createInviteDto.placeholderUserId ?? null,
     });
 
     this.logger.log(
@@ -143,6 +146,55 @@ export class OrganizationsInvitesService {
     }
 
     return invite;
+  }
+
+  /**
+   * Uebergibt einen Mitarbeiter ohne Login an das echte Konto, das die
+   * Einladung angenommen hat: alle seine Zeiteintraege gehen an userId ueber,
+   * danach werden Platzhalter-Mitgliedschaft und -Profil entfernt. Nach
+   * createMembership und vor deleteConsumedInvite aufrufen. Ohne
+   * placeholderUserId passiert nichts.
+   */
+  async transferPlaceholder(
+    invite: OrganizationInviteEntity,
+    userId: string,
+  ): Promise<void> {
+    const placeholderId = invite.placeholderUserId;
+    if (!placeholderId || placeholderId === userId) return;
+
+    await this.inviteRepository.manager.transaction(async (manager) => {
+      const placeholder = await manager.findOne(UserProfileEntity, {
+        where: { id: placeholderId, isPlaceholder: true },
+      });
+      if (!placeholder) return;
+
+      try {
+        await manager.update(
+          TimeEntryEntity,
+          { creatorId: placeholderId },
+          { creatorId: userId },
+        );
+      } catch (error) {
+        const e = error as { code?: string; driverError?: { code?: string } };
+        if (e.code === '23P01' || e.driverError?.code === '23P01') {
+          throw new AppConflictException(
+            ErrorCode.PLACEHOLDER_MERGE_OVERLAP,
+            'Die erfassten Zeiten überschneiden sich mit bestehenden Einträgen dieses Kontos',
+          );
+        }
+        throw error;
+      }
+      await manager.delete(OrganizationMemberEntity, { userId: placeholderId });
+      await manager.update(
+        OrganizationInviteEntity,
+        { placeholderUserId: placeholderId },
+        { placeholderUserId: null },
+      );
+      await manager.delete(UserProfileEntity, { id: placeholderId });
+    });
+    this.logger.log(
+      `Platzhalter ${placeholderId} an User ${userId} uebergeben (Einladung ${invite.id})`,
+    );
   }
 
   /**
@@ -246,6 +298,7 @@ export class OrganizationsInvitesService {
       invite.organizationId,
       invite.role,
     );
+    await this.transferPlaceholder(invite, userId);
     await this.deleteConsumedInvite(invite);
     return membership;
   }
@@ -272,9 +325,12 @@ export class OrganizationsInvitesService {
    * Invites verschickt werden können als noch freie Plätze vorhanden sind.
    */
   async countPendingByOrganization(organizationId: string): Promise<number> {
+    // Einladungen fuer Platzhalter nicht doppelt zaehlen - der Platzhalter
+    // ist bereits Mitglied.
     return this.inviteRepository.count({
       where: {
         organizationId,
+        placeholderUserId: IsNull(),
         usedAt: IsNull(),
         expiresAt: MoreThan(new Date()),
       },

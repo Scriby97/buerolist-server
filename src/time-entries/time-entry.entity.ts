@@ -42,6 +42,15 @@ export class TimeEntryEntity {
   @JoinColumn({ name: 'creatorId' })
   creator: UserProfileEntity;
 
+  // Wer den Eintrag erfasst hat, falls nicht der Mitarbeiter selbst (Admin/
+  // Owner erfasst fuer jemanden). NULL = selbst erfasst (auch Altdaten).
+  @Column({ type: 'uuid', nullable: true })
+  createdById?: string | null;
+
+  @ManyToOne(() => UserProfileEntity, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'createdById' })
+  createdBy?: UserProfileEntity | null;
+
   @Column({ type: 'timestamp' })
   startAt: Date;
 

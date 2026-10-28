@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Not, Repository } from 'typeorm';
 import { OrganizationMemberEntity } from './organization-member.entity';
-import { OrganizationRole } from '../auth/enums/user-role.enum';
+import { OrganizationRole, UserRole } from '../auth/enums/user-role.enum';
+import { UserProfileEntity } from '../auth/entities/user-profile.entity';
 import {
   AppBadRequestException,
   AppForbiddenException,
@@ -31,6 +33,41 @@ export class OrganizationMembersService {
   }
 
   /**
+   * Legt einen Mitarbeiter ohne Login an (Platzhalter): ein Profil ohne
+   * E-Mail und ohne Supabase-Auth-User plus Mitgliedschaft als Mitarbeiter.
+   * Admin/Owner koennen fuer ihn Zeiten erfassen; spaeter wird er per
+   * Einladung an ein echtes Konto uebergeben (siehe
+   * OrganizationsInvitesService.transferPlaceholder).
+   */
+  async createPlaceholder(
+    organizationId: string,
+    firstName: string,
+    lastName: string,
+  ): Promise<OrganizationMemberEntity> {
+    return this.memberRepository.manager.transaction(async (manager) => {
+      const user = await manager.getRepository(UserProfileEntity).save(
+        manager.getRepository(UserProfileEntity).create({
+          id: randomUUID(),
+          email: null,
+          isPlaceholder: true,
+          role: UserRole.USER,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+        }),
+      );
+      const repo = manager.getRepository(OrganizationMemberEntity);
+      const member = await repo.save(
+        repo.create({
+          userId: user.id,
+          organizationId,
+          role: OrganizationRole.EMPLOYEE,
+        }),
+      );
+      return Object.assign(member, { user });
+    });
+  }
+
+  /**
    * Owner (Name + Email) für mehrere Organisationen auf einmal, für die
    * Admin-Organisationsübersicht - vermeidet eine Einzelabfrage pro
    * Organisation.
@@ -53,7 +90,7 @@ export class OrganizationMembersService {
       owners.map((member) => [
         member.organizationId,
         {
-          email: member.user.email,
+          email: member.user.email ?? '',
           name:
             [member.user.firstName, member.user.lastName]
               .filter(Boolean)
@@ -132,6 +169,12 @@ export class OrganizationMembersService {
   /**
    * Die Mitgliedschaft eines Users in einer bestimmten Organisation (oder null)
    */
+  async findUser(userId: string): Promise<UserProfileEntity | null> {
+    return this.memberRepository.manager.findOne(UserProfileEntity, {
+      where: { id: userId },
+    });
+  }
+
   async findMembership(
     userId: string,
     organizationId: string,
@@ -154,6 +197,14 @@ export class OrganizationMembersService {
     callerRole: OrganizationRole,
   ): Promise<OrganizationMemberEntity> {
     const member = await this.findMemberOrThrow(organizationId, memberId);
+
+    // Ohne Login kann ein Platzhalter nichts verwalten - bleibt Mitarbeiter
+    if (member.user?.isPlaceholder) {
+      throw new AppBadRequestException(
+        ErrorCode.MEMBER_IS_PLACEHOLDER,
+        'Mitarbeiter ohne Login koennen keine andere Rolle erhalten',
+      );
+    }
 
     if (
       member.role === OrganizationRole.OWNER ||
@@ -207,7 +258,10 @@ export class OrganizationMembersService {
         repo.findOne({
           where: { id: currentOwnerMembershipId, organizationId },
         }),
-        repo.findOne({ where: { id: newOwnerMemberId, organizationId } }),
+        repo.findOne({
+          where: { id: newOwnerMemberId, organizationId },
+          relations: ['user'],
+        }),
       ]);
 
       if (!currentOwner || currentOwner.role !== OrganizationRole.OWNER) {
@@ -220,6 +274,12 @@ export class OrganizationMembersService {
         throw new AppNotFoundException(
           ErrorCode.MEMBER_TARGET_NOT_FOUND,
           'Ziel-Mitglied nicht gefunden',
+        );
+      }
+      if (newOwner.user?.isPlaceholder) {
+        throw new AppBadRequestException(
+          ErrorCode.MEMBER_IS_PLACEHOLDER,
+          'Mitarbeiter ohne Login koennen nicht Owner werden',
         );
       }
 
@@ -299,6 +359,7 @@ export class OrganizationMembersService {
   ): Promise<OrganizationMemberEntity> {
     const member = await this.memberRepository.findOne({
       where: { id: memberId, organizationId, archivedAt: IsNull() },
+      relations: ['user'],
     });
 
     if (!member) {

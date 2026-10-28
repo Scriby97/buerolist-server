@@ -65,8 +65,10 @@ export interface TimeEntryWithProject {
     id: string;
     firstName?: string;
     lastName?: string;
-    email: string;
+    email: string | null;
   };
+  /** Nur gesetzt, wenn jemand anderes (Admin/Owner) den Eintrag erfasst hat */
+  createdBy: { id: string; firstName?: string; lastName?: string } | null;
 }
 
 // Leere/nur-Leerzeichen-Bemerkungen nicht als '' speichern, sondern als null.
@@ -161,6 +163,7 @@ export class TimeEntriesService {
       .innerJoinAndSelect('t.project', 'project')
       .innerJoinAndSelect('project.customer', 'customer')
       .innerJoinAndSelect('t.creator', 'creator')
+      .leftJoinAndSelect('t.createdBy', 'createdBy')
       .leftJoinAndSelect('t.category', 'category')
       .orderBy('t.startAt', 'DESC')
       .addOrderBy('t.id', 'DESC');
@@ -230,6 +233,14 @@ export class TimeEntriesService {
         lastName: t.creator.lastName,
         email: t.creator.email,
       },
+      createdBy:
+        t.createdBy && t.createdById !== t.creatorId
+          ? {
+              id: t.createdBy.id,
+              firstName: t.createdBy.firstName,
+              lastName: t.createdBy.lastName,
+            }
+          : null,
     }));
 
     return { timeEntries: items, nextCursor };
@@ -329,6 +340,8 @@ export class TimeEntriesService {
     projectId: string;
     categoryId?: string | null;
     creatorId: string;
+    /** Wer erfasst (Admin/Owner fuer jemand anderen) - sonst = creatorId */
+    createdById?: string;
     startAt: Date;
     endAt: Date;
     comment?: string | null;
