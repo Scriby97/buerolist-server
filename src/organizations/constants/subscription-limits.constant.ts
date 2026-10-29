@@ -11,9 +11,9 @@ export interface SubscriptionLimits {
 export const SUBSCRIPTION_LIMITS: Record<SubscriptionTier, SubscriptionLimits> =
   {
     [SubscriptionTier.FREE]: {
-      maxProjects: 8,
-      maxMembers: 5,
-      maxCustomers: 8,
+      maxProjects: 100,
+      maxMembers: 20,
+      maxCustomers: 50,
       priceChf: 0,
     },
     [SubscriptionTier.PRO]: {
