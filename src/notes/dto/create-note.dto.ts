@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
 // Genau eines von customerId/projectId muss gesetzt sein - geprüft im
 // NotesService (assertExactlyOneTarget), zusätzlich per SQL-CHECK-Constraint
@@ -12,7 +12,10 @@ export class CreateNoteDto {
   @IsUUID()
   projectId?: string;
 
+  // Optional: eine Notiz kann auch nur aus Fotos bestehen (Fotos werden
+  // direkt nach dem Anlegen hochgeladen).
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  text: string;
+  @MaxLength(10000)
+  text?: string;
 }

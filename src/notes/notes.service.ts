@@ -88,14 +88,14 @@ export class NotesService {
     customerId?: string;
     projectId?: string;
     authorId: string;
-    text: string;
+    text?: string;
   }): Promise<NoteEntity> {
     const note = this.repo.create({
       organizationId: data.organizationId,
       customerId: data.customerId ?? null,
       projectId: data.projectId ?? null,
       authorId: data.authorId,
-      text: data.text,
+      text: data.text?.trim() ?? '',
     });
     const saved = await this.repo.save(note);
     // Eine neue Notiz hat noch keine Fotos - explizit mitliefern, damit der
