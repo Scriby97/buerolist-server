@@ -21,8 +21,15 @@ export class CreateAbsenceDto {
   @IsUUID()
   organizationId: string;
 
+  /** Vordefinierter Grund - oder reasonText (eigener Grund) */
+  @IsOptional()
   @IsUUID()
-  reasonId: string;
+  reasonId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  reasonText?: string;
 
   /** Erster Tag "YYYY-MM-DD" */
   @Matches(DATE_KEY)
@@ -62,9 +69,16 @@ export class CreateAbsenceDto {
 }
 
 export class UpdateAbsenceDto {
+  /** Neuer vordefinierter Grund (ersetzt einen eigenen Grund) */
   @IsOptional()
   @IsUUID()
   reasonId?: string;
+
+  /** Neuer eigener Grund (ersetzt den vordefinierten) */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  reasonText?: string;
 
   @IsOptional()
   @Matches(DATE_KEY)

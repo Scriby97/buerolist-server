@@ -225,11 +225,14 @@ export class AbsencesController extends AbsenceAccess {
       );
     }
 
-    const reason = await this.absencesService.findReason(dto.reasonId);
-    if (reason.organizationId !== dto.organizationId) {
-      throw new AppForbiddenException(
-        ErrorCode.ABSENCE_REASON_NOT_FOUND,
-        'Abwesenheitsgrund gehört nicht zu dieser Organisation',
+    // Vordefinierter Grund der Organisation oder eigener (frei eingegeben)
+    const reasonText = dto.reasonId ? null : dto.reasonText?.trim() || null;
+    if (dto.reasonId) {
+      await this.assertReasonOfOrganization(dto.reasonId, dto.organizationId);
+    } else if (!reasonText) {
+      throw new AppBadRequestException(
+        ErrorCode.VALIDATION_BAD_REQUEST_GENERIC,
+        'reasonId oder reasonText ist erforderlich',
       );
     }
 
@@ -246,7 +249,8 @@ export class AbsencesController extends AbsenceAccess {
           organizationId: dto.organizationId,
           creatorId,
           createdById: user.id,
-          reasonId: dto.reasonId,
+          reasonId: dto.reasonId ?? null,
+          reasonText,
           date,
           minutes,
           comment: dto.comment?.trim() || null,
@@ -264,15 +268,25 @@ export class AbsencesController extends AbsenceAccess {
   ) {
     const absence = await this.assertCanModify(user, id, 'edit', dto.date);
     if (dto.reasonId && dto.reasonId !== absence.reasonId) {
-      const reason = await this.absencesService.findReason(dto.reasonId);
-      if (reason.organizationId !== absence.organizationId) {
-        throw new AppForbiddenException(
-          ErrorCode.ABSENCE_REASON_NOT_FOUND,
-          'Abwesenheitsgrund gehört nicht zu dieser Organisation',
-        );
-      }
+      await this.assertReasonOfOrganization(
+        dto.reasonId,
+        absence.organizationId,
+      );
     }
     return this.absencesService.update(id, dto);
+  }
+
+  private async assertReasonOfOrganization(
+    reasonId: string,
+    organizationId: string,
+  ) {
+    const reason = await this.absencesService.findReason(reasonId);
+    if (reason.organizationId !== organizationId) {
+      throw new AppForbiddenException(
+        ErrorCode.ABSENCE_REASON_NOT_FOUND,
+        'Abwesenheitsgrund gehört nicht zu dieser Organisation',
+      );
+    }
   }
 
   @Delete(':id')

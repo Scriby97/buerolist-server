@@ -14,6 +14,7 @@ import {
   DEFAULT_WORK_SCHEDULE,
   workdayMinutes,
 } from '../common/utils/work-schedule.util';
+import { saveWithNextNumber } from '../common/utils/next-number.util';
 
 type PersonRef = {
   id: string;
@@ -31,7 +32,8 @@ export interface AbsenceResponse {
   date: string;
   minutes: number;
   comment: string | null;
-  reason: { id: string; name: string };
+  /** Vordefinierter Grund (id, number) oder eigener (id/number null) */
+  reason: { id: string | null; number: number | null; name: string };
   creator: PersonRef;
   /** Wer erfasst hat, falls nicht die Person selbst */
   createdBy: PersonRef | null;
@@ -41,7 +43,8 @@ export interface NewAbsence {
   organizationId: string;
   creatorId: string;
   createdById: string;
-  reasonId: string;
+  reasonId: string | null;
+  reasonText: string | null;
   date: string;
   minutes: number;
   comment: string | null;
@@ -71,7 +74,7 @@ export class AbsencesService {
   findReasons(organizationId: string): Promise<AbsenceReasonEntity[]> {
     return this.reasonRepo.find({
       where: { organizationId },
-      order: { sortOrder: 'ASC', createdAt: 'ASC' },
+      order: { number: 'ASC' },
     });
   }
 
@@ -87,17 +90,17 @@ export class AbsencesService {
     return reason;
   }
 
-  async createReason(
+  /** Neuer Grund mit der naechsten Nummer (A-xxx). */
+  createReason(
     organizationId: string,
     name: string,
   ): Promise<AbsenceReasonEntity> {
-    const max = await this.reasonRepo.maximum('sortOrder', { organizationId });
-    return this.reasonRepo.save(
-      this.reasonRepo.create({
-        organizationId,
-        name: name.trim(),
-        sortOrder: (max ?? 0) + 1,
-      }),
+    return saveWithNextNumber(
+      () => this.reasonRepo.maximum('number', { organizationId }),
+      (number) =>
+        this.reasonRepo.save(
+          this.reasonRepo.create({ organizationId, name: name.trim(), number }),
+        ),
     );
   }
 
@@ -146,7 +149,7 @@ export class AbsencesService {
   }): Promise<AbsenceResponse[]> {
     const qb = this.absenceRepo
       .createQueryBuilder('a')
-      .innerJoinAndSelect('a.reason', 'reason')
+      .leftJoinAndSelect('a.reason', 'reason')
       .innerJoinAndSelect('a.creator', 'creator')
       .leftJoinAndSelect('a.createdBy', 'createdBy')
       .orderBy('a.date', 'DESC')
@@ -197,6 +200,7 @@ export class AbsencesService {
     id: string,
     patch: {
       reasonId?: string;
+      reasonText?: string;
       date?: string;
       minutes?: number;
       comment?: string | null;
@@ -204,7 +208,14 @@ export class AbsencesService {
   ): Promise<AbsenceResponse> {
     await this.findOne(id);
     const changes: Partial<AbsenceEntity> = {};
-    if (patch.reasonId !== undefined) changes.reasonId = patch.reasonId;
+    // Entweder vordefinierter oder eigener Grund
+    if (patch.reasonId) {
+      changes.reasonId = patch.reasonId;
+      changes.reasonText = null;
+    } else if (patch.reasonText?.trim()) {
+      changes.reasonId = null;
+      changes.reasonText = patch.reasonText.trim();
+    }
     if (patch.date !== undefined) changes.date = patch.date;
     if (patch.minutes !== undefined) changes.minutes = patch.minutes;
     if (patch.comment !== undefined) {
@@ -228,7 +239,9 @@ export class AbsencesService {
       date: a.date,
       minutes: a.minutes,
       comment: a.comment,
-      reason: { id: a.reason.id, name: a.reason.name },
+      reason: a.reason
+        ? { id: a.reason.id, number: a.reason.number, name: a.reason.name }
+        : { id: null, number: null, name: a.reasonText ?? '' },
       creator: person(a.creator),
       createdBy:
         a.createdBy && a.createdById !== a.creatorId

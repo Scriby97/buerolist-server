@@ -3,7 +3,10 @@ import type { AbsencesService } from './absences.service';
 import type { OrganizationMembersService } from '../organizations/organization-members.service';
 import { OrganizationRole, UserRole } from '../auth/enums/user-role.enum';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
-import { AppForbiddenException } from '../common/exceptions';
+import {
+  AppBadRequestException,
+  AppForbiddenException,
+} from '../common/exceptions';
 import { currentWeekStartKey } from '../common/utils/work-week.util';
 
 describe('AbsencesController', () => {
@@ -109,6 +112,26 @@ describe('AbsencesController', () => {
       await expect(
         controller.create(employee, { ...baseDto, from: '2020-01-06' }),
       ).rejects.toBeInstanceOf(AppForbiddenException);
+    });
+
+    it('accepts an own reason instead of a predefined one', async () => {
+      const result = (await controller.create(employee, {
+        ...baseDto,
+        reasonId: undefined,
+        reasonText: '  Umzug ',
+      })) as unknown as { reasonId: string | null; reasonText: string }[];
+      expect(result[0]).toMatchObject({ reasonId: null, reasonText: 'Umzug' });
+      expect(service.findReason).not.toHaveBeenCalled();
+    });
+
+    it('requires a predefined or an own reason', async () => {
+      await expect(
+        controller.create(employee, {
+          ...baseDto,
+          reasonId: undefined,
+          reasonText: '  ',
+        }),
+      ).rejects.toBeInstanceOf(AppBadRequestException);
     });
 
     it('rejects a reason of another organization', async () => {

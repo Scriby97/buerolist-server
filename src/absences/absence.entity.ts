@@ -38,12 +38,17 @@ export class AbsenceEntity {
   @JoinColumn({ name: 'createdById' })
   createdBy?: UserProfileEntity | null;
 
-  @Column({ type: 'uuid' })
-  reasonId: string;
+  // Vordefinierter Grund - oder null mit frei eingegebenem reasonText
+  @Column({ type: 'uuid', nullable: true })
+  reasonId: string | null;
 
-  @ManyToOne(() => AbsenceReasonEntity, { nullable: false })
+  @ManyToOne(() => AbsenceReasonEntity, { nullable: true })
   @JoinColumn({ name: 'reasonId' })
-  reason: AbsenceReasonEntity;
+  reason: AbsenceReasonEntity | null;
+
+  /** Eigener Grund (migrations/016), nur ohne reasonId */
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  reasonText: string | null;
 
   /** Kalendertag "YYYY-MM-DD" (Schweizer Kalender) */
   @Column({ type: 'date' })
