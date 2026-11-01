@@ -57,15 +57,23 @@ export class NotePhotosService {
     this.bucketReady = true;
   }
 
-  private assertValid(file: UploadablePhoto): string {
+  // Abgewiesene Uploads werden geloggt (Format/Groesse), damit sich
+  // Probleme einzelner Geraete in den Render-Logs nachvollziehen lassen.
+  private assertValid(noteId: string, file: UploadablePhoto): string {
     const ext = ALLOWED_MIME_TO_EXT[file.mimetype];
     if (!ext) {
+      this.logger.warn(
+        `Foto fuer Notiz ${noteId} abgewiesen: Format ${file.mimetype || '(leer)'}, ${file.size} Bytes`,
+      );
       throw new AppBadRequestException(
         ErrorCode.NOTE_PHOTO_INVALID,
         'Nur PNG-, JPEG- oder WebP-Bilder sind erlaubt',
       );
     }
     if (file.size > MAX_BYTES) {
+      this.logger.warn(
+        `Foto fuer Notiz ${noteId} abgewiesen: zu gross (${file.size} Bytes)`,
+      );
       throw new AppBadRequestException(
         ErrorCode.NOTE_PHOTO_INVALID,
         'Das Bild ist zu gross (max. 10 MB)',
@@ -75,7 +83,7 @@ export class NotePhotosService {
   }
 
   async upload(noteId: string, file: UploadablePhoto): Promise<string> {
-    const ext = this.assertValid(file);
+    const ext = this.assertValid(noteId, file);
     await this.ensureBucket();
 
     const admin = this.supabaseService.getAdminClient();
@@ -93,6 +101,9 @@ export class NotePhotosService {
       );
     }
 
+    this.logger.log(
+      `Foto fuer Notiz ${noteId} gespeichert (${file.mimetype}, ${file.size} Bytes)`,
+    );
     const { data } = admin.storage.from(BUCKET).getPublicUrl(path);
     return data.publicUrl;
   }

@@ -1,4 +1,5 @@
 import {
+  Logger,
   Controller,
   Post,
   Delete,
@@ -29,6 +30,8 @@ import {
  */
 @Controller('notes')
 export class NotesController {
+  private readonly logger = new Logger(NotesController.name);
+
   constructor(
     private readonly notesService: NotesService,
     private readonly membersService: OrganizationMembersService,
@@ -116,6 +119,7 @@ export class NotesController {
     file: { buffer: Buffer; mimetype: string; size: number } | undefined,
   ) {
     if (!file) {
+      this.logger.warn(`Foto fuer Notiz ${id} ohne Datei (User ${user.id})`);
       throw new AppBadRequestException(
         ErrorCode.NOTE_PHOTO_INVALID,
         'Keine Datei hochgeladen',
