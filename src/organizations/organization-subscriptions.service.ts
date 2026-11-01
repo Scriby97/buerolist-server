@@ -234,7 +234,8 @@ export class OrganizationSubscriptionsService {
       ]);
       this.logger.warn(
         `Organisation ${organizationId} lag beim Downgrade auf Free über dem Free-Limit ` +
-          `(Projekte=${limitStatus.projectCount}, Mitarbeiter=${limitStatus.memberCount}) - ` +
+          `(Projekte=${limitStatus.projectCount}, Mitarbeiter=${limitStatus.memberCount}, ` +
+          `Kunden=${limitStatus.customerCount}) - ` +
           `Mitglieder (ausser Owner) und Projekte archiviert, Daten bleiben erhalten.`,
       );
     }

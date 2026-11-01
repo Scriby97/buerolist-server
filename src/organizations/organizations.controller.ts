@@ -435,10 +435,15 @@ export class OrganizationsController {
     return {
       ...subscription,
       limits: SUBSCRIPTION_LIMITS[subscription.tier],
-      // Fuers Frontend: Warnung vor dem Kuendigen anzeigen, wenn die Organisation
-      // mehr aktive Fahrzeuge/Mitarbeiter hat, als der kostenlose Lieutenant-Tarif
-      // erlaubt (siehe OrganizationSubscriptionsService.downgradeToFree).
-      overLieutenantLimit: freeLimitStatus.overLimit,
+      // Fuers Frontend: Warnung vor dem Kuendigen bzw. Hinweis-Banner, wenn die
+      // Organisation mehr aktive Projekte, Mitarbeiter oder Kunden hat, als der
+      // kostenlose Free-Tarif erlaubt (siehe downgradeToFree).
+      overFreeLimit: freeLimitStatus.overLimit,
+      usage: {
+        projects: freeLimitStatus.projectCount,
+        members: freeLimitStatus.memberCount,
+        customers: freeLimitStatus.customerCount,
+      },
     };
   }
 
