@@ -45,6 +45,7 @@ describe('ReminderSchedulerService.processReminder', () => {
   >;
   let timeEntries: { find: jest.Mock };
   let profiles: { findOne: jest.Mock };
+  let absences: { find: jest.Mock };
   let service: ReminderSchedulerService;
 
   beforeEach(() => {
@@ -59,6 +60,7 @@ describe('ReminderSchedulerService.processReminder', () => {
       removeSubscriptionByEndpoint: jest.fn().mockResolvedValue(undefined),
     };
     timeEntries = { find: jest.fn().mockResolvedValue([]) };
+    absences = { find: jest.fn().mockResolvedValue([]) };
     // Standard-Arbeitstag 07:15-12:00, 13:00-17:00 = 8:45
     profiles = {
       findOne: jest.fn().mockResolvedValue({
@@ -72,6 +74,7 @@ describe('ReminderSchedulerService.processReminder', () => {
       notifications as unknown as NotificationsService,
       timeEntries as never,
       profiles as never,
+      absences as never,
     );
   });
 
@@ -105,6 +108,13 @@ describe('ReminderSchedulerService.processReminder', () => {
       (webpush.sendNotification as jest.Mock).mock.calls[0][1] as string,
     ) as { body: string };
     expect(payload.body).toContain('3:30 von 8:45');
+  });
+
+  it('zaehlt Abwesenheiten mit (z.B. ganzer Krankheitstag)', async () => {
+    absences.find.mockResolvedValue([{ id: 'a1', minutes: 525 }]);
+    await service.processReminder(reminder);
+    expect(webpush.sendNotification).not.toHaveBeenCalled();
+    expect(notifications.markSent).toHaveBeenCalledWith('r1');
   });
 
   it('sendet hoechstens einmal pro Tag', async () => {

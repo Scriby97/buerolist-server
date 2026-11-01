@@ -3,6 +3,7 @@ import { OrganizationInviteEntity } from './entities/organization-invite.entity'
 import { OrganizationMemberEntity } from './organization-member.entity';
 import { UserProfileEntity } from '../auth/entities/user-profile.entity';
 import { TimeEntryEntity } from '../time-entries/time-entry.entity';
+import { AbsenceEntity } from '../absences/absence.entity';
 import { AppConflictException } from '../common/exceptions';
 
 describe('OrganizationsInvitesService.transferPlaceholder', () => {
@@ -35,6 +36,11 @@ describe('OrganizationsInvitesService.transferPlaceholder', () => {
     await service.transferPlaceholder(invite, 'real');
     expect(manager.update).toHaveBeenCalledWith(
       TimeEntryEntity,
+      { creatorId: 'ph' },
+      { creatorId: 'real' },
+    );
+    expect(manager.update).toHaveBeenCalledWith(
+      AbsenceEntity,
       { creatorId: 'ph' },
       { creatorId: 'real' },
     );

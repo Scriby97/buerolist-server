@@ -21,6 +21,8 @@ import { NoteEntity } from './notes/note.entity';
 import { NotePhotoEntity } from './notes/note-photo.entity';
 import { EntryReminderEntity } from './notifications/entry-reminder.entity';
 import { PushSubscriptionEntity } from './notifications/push-subscription.entity';
+import { AbsenceEntity } from './absences/absence.entity';
+import { AbsenceReasonEntity } from './absences/absence-reason.entity';
 import { SupabaseModule } from './supabase/supabase.module';
 import { AuthModule } from './auth/auth.module';
 import { OrganizationsModule } from './organizations/organizations.module';
@@ -32,6 +34,7 @@ import { TimeEntriesModule } from './time-entries/time-entries.module';
 import { NotesModule } from './notes/notes.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ItemPresetsModule } from './item-presets/item-presets.module';
+import { AbsencesModule } from './absences/absences.module';
 import { ItemPresetEntity } from './item-presets/item-preset.entity';
 
 @Module({
@@ -62,6 +65,8 @@ import { ItemPresetEntity } from './item-presets/item-preset.entity';
         EntryReminderEntity,
         PushSubscriptionEntity,
         ItemPresetEntity,
+        AbsenceEntity,
+        AbsenceReasonEntity,
       ],
       synchronize: false, // Migrations sind handgeschriebenes SQL, siehe migrations/
       ssl:
@@ -91,6 +96,7 @@ import { ItemPresetEntity } from './item-presets/item-preset.entity';
     NotesModule,
     NotificationsModule,
     ItemPresetsModule,
+    AbsencesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

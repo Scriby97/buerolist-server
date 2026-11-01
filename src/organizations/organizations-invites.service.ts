@@ -8,6 +8,7 @@ import { CreateInviteDto } from './dto/create-invite.dto';
 import { UserRole, OrganizationRole } from '../auth/enums/user-role.enum';
 import { UserProfileEntity } from '../auth/entities/user-profile.entity';
 import { TimeEntryEntity } from '../time-entries/time-entry.entity';
+import { AbsenceEntity } from '../absences/absence.entity';
 import { randomBytes } from 'crypto';
 import {
   AppBadRequestException,
@@ -150,7 +151,8 @@ export class OrganizationsInvitesService {
 
   /**
    * Uebergibt einen Mitarbeiter ohne Login an das echte Konto, das die
-   * Einladung angenommen hat: alle seine Zeiteintraege gehen an userId ueber,
+   * Einladung angenommen hat: alle seine Zeiteintraege und Abwesenheiten
+   * gehen an userId ueber,
    * danach werden Platzhalter-Mitgliedschaft und -Profil entfernt. Nach
    * createMembership und vor deleteConsumedInvite aufrufen. Ohne
    * placeholderUserId passiert nichts.
@@ -184,6 +186,11 @@ export class OrganizationsInvitesService {
         }
         throw error;
       }
+      await manager.update(
+        AbsenceEntity,
+        { creatorId: placeholderId },
+        { creatorId: userId },
+      );
       await manager.delete(OrganizationMemberEntity, { userId: placeholderId });
       await manager.update(
         OrganizationInviteEntity,

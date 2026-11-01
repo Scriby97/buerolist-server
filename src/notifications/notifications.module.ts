@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { EntryReminderEntity } from './entry-reminder.entity';
 import { PushSubscriptionEntity } from './push-subscription.entity';
 import { TimeEntryEntity } from '../time-entries/time-entry.entity';
+import { AbsenceEntity } from '../absences/absence.entity';
 import { UserProfileEntity } from '../auth/entities/user-profile.entity';
 import { AuthModule } from '../auth/auth.module';
 import { NotificationsService } from './notifications.service';
@@ -16,6 +17,7 @@ import { ReminderSchedulerService } from './reminder-scheduler.service';
       PushSubscriptionEntity,
       TimeEntryEntity,
       UserProfileEntity,
+      AbsenceEntity,
     ]),
     AuthModule,
   ],

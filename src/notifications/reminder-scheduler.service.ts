@@ -11,6 +11,7 @@ import {
 } from '../common/utils/work-schedule.util';
 import { NotificationsService } from './notifications.service';
 import { TimeEntryEntity } from '../time-entries/time-entry.entity';
+import { AbsenceEntity } from '../absences/absence.entity';
 import { zurichDateKey } from '../common/utils/work-week.util';
 
 /**
@@ -47,6 +48,8 @@ export class ReminderSchedulerService {
     private readonly timeEntryRepository: Repository<TimeEntryEntity>,
     @InjectRepository(UserProfileEntity)
     private readonly profileRepository: Repository<UserProfileEntity>,
+    @InjectRepository(AbsenceEntity)
+    private readonly absenceRepository: Repository<AbsenceEntity>,
   ) {
     const publicKey = process.env.VAPID_PUBLIC_KEY;
     const privateKey = process.env.VAPID_PRIVATE_KEY;
@@ -87,7 +90,10 @@ export class ReminderSchedulerService {
     }
   }
 
-  /** Heute (Schweizer Kalendertag) erfasste Minuten eines Users. */
+  /**
+   * Heute (Schweizer Kalendertag) erfasste Minuten eines Users - Zeiteintraege
+   * plus Abwesenheiten (an einem Krankheitstag keine Erinnerung).
+   */
   async minutesRecordedToday(userId: string, now: Date): Promise<number> {
     const start = zurichStartOfDay(now);
     // Naechster Tagesbeginn: 26h spaeter liegt sicher im Folgetag (Sommerzeit)
@@ -99,6 +105,11 @@ export class ReminderSchedulerService {
       },
       select: { id: true, startAt: true, endAt: true },
     });
+    const absences = await this.absenceRepository.find({
+      where: { creatorId: userId, date: zurichDateKey(now) },
+      select: { id: true, minutes: true },
+    });
+    const absenceMinutes = absences.reduce((sum, a) => sum + a.minutes, 0);
     return entries.reduce(
       (sum, entry) =>
         sum +
@@ -107,7 +118,7 @@ export class ReminderSchedulerService {
             new Date(entry.startAt).getTime()) /
             60000,
         ),
-      0,
+      absenceMinutes,
     );
   }
 
