@@ -1,9 +1,8 @@
-// Platzhalter-Tarife - Namen/Preise/Limits sind bewusst noch nicht final,
-// siehe SUBSCRIPTION_LIMITS. Struktur (zwei Tarife statt FleetTracks drei)
-// ist einfach um weitere Tarife erweiterbar, ohne Guards/Billing-Code anzufassen.
+// Tarife nach Teamgroesse, Preise/Limits siehe SUBSCRIPTION_LIMITS.
 export enum SubscriptionTier {
-  FREE = 'free', // kostenlos - begrenzt auf wenige aktive Projekte/Mitglieder
-  PRO = 'pro', // CHF 39.-/Monat (Platzhalter) - unlimitiert
+  FREE = 'free', // kostenlos - 2 Mitarbeiter, 10 aktive Projekte
+  STANDARD = 'standard', // CHF 29.-/Monat - bis 10 Mitarbeiter
+  PRO = 'pro', // CHF 69.-/Monat - bis 30 Mitarbeiter
 }
 
 export enum SubscriptionStatus {

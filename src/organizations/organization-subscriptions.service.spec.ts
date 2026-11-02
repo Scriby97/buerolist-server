@@ -11,6 +11,7 @@ import {
   SubscriptionTier,
   SubscriptionStatus,
 } from './enums/subscription-tier.enum';
+import { AppBadRequestException } from '../common/exceptions';
 
 describe('OrganizationSubscriptionsService', () => {
   let service: OrganizationSubscriptionsService;
@@ -77,6 +78,26 @@ describe('OrganizationSubscriptionsService', () => {
     });
   });
 
+  describe('assertFitsTier', () => {
+    it('allows switching to Standard with up to 10 members', async () => {
+      projectRepository.count.mockResolvedValue(50);
+      membersService.countByOrganization.mockResolvedValue(10);
+
+      await expect(
+        service.assertFitsTier('org-1', SubscriptionTier.STANDARD),
+      ).resolves.toBeUndefined();
+    });
+
+    it('rejects switching to Standard with more than 10 members', async () => {
+      projectRepository.count.mockResolvedValue(5);
+      membersService.countByOrganization.mockResolvedValue(11);
+
+      await expect(
+        service.assertFitsTier('org-1', SubscriptionTier.STANDARD),
+      ).rejects.toBeInstanceOf(AppBadRequestException);
+    });
+  });
+
   describe('downgradeToFree', () => {
     const baseSubscription = {
       organizationId: 'org-1',
@@ -86,7 +107,7 @@ describe('OrganizationSubscriptionsService', () => {
 
     it('archives members (except owner) and projects when over the free-tier limit', async () => {
       subscriptionRepository.findOne.mockResolvedValue({ ...baseSubscription });
-      projectRepository.count.mockResolvedValue(101); // > maxProjects (100)
+      projectRepository.count.mockResolvedValue(11); // > maxProjects (10)
       membersService.countByOrganization.mockResolvedValue(1);
 
       await service.downgradeToFree('org-1');
@@ -100,17 +121,27 @@ describe('OrganizationSubscriptionsService', () => {
       );
     });
 
-    it('treats more customers than the free-tier limit as over the limit', async () => {
+    it('treats more members than the free-tier limit as over the limit', async () => {
       subscriptionRepository.findOne.mockResolvedValue({ ...baseSubscription });
       projectRepository.count.mockResolvedValue(1);
-      membersService.countByOrganization.mockResolvedValue(1);
-      customerRepository.count.mockResolvedValueOnce(51); // > maxCustomers (50)
+      membersService.countByOrganization.mockResolvedValue(3); // > maxMembers (2)
 
       await service.downgradeToFree('org-1');
 
       expect(membersService.archiveMembersExceptOwner).toHaveBeenCalledWith(
         'org-1',
       );
+    });
+
+    it('does not limit customers', async () => {
+      subscriptionRepository.findOne.mockResolvedValue({ ...baseSubscription });
+      projectRepository.count.mockResolvedValue(1);
+      membersService.countByOrganization.mockResolvedValue(1);
+      customerRepository.count.mockResolvedValueOnce(500);
+
+      await service.downgradeToFree('org-1');
+
+      expect(membersService.archiveMembersExceptOwner).not.toHaveBeenCalled();
     });
 
     it('does not archive anything when the organization stays within the free-tier limit', async () => {

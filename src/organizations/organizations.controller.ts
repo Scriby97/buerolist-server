@@ -68,7 +68,7 @@ export class OrganizationsController {
    * Der User wird sofort Owner.
    *
    * Free (kostenlos): Organisation wird sofort angelegt, keine Zahlung nötig.
-   * Pro (bezahlt): Es wird NUR eine Stripe Checkout Session erstellt -
+   * Standard/Pro (bezahlt): Es wird NUR eine Stripe Checkout Session erstellt -
    * die Organisation selbst entsteht erst im checkout.session.completed Webhook,
    * sobald die Zahlung bestätigt ist. So bleibt bei Abbruch/Fehlschlag der Zahlung
    * keine unvollständige Organisation in der DB zurück.
@@ -78,7 +78,7 @@ export class OrganizationsController {
     @Body() dto: CreateSelfServiceOrganizationDto,
     @CurrentUser() user: AuthUser,
   ) {
-    if (dto.tier === SubscriptionTier.PRO) {
+    if (dto.tier !== SubscriptionTier.FREE) {
       // Vorab-Check, damit der User nicht erst bezahlt und danach an einer
       // Namens-Kollision scheitert (schließt die seltene Race Condition zwischen
       // diesem Check und Zahlungsabschluss nicht aus, siehe createFromStripeCheckout).
@@ -497,9 +497,10 @@ export class OrganizationsController {
       return { ...current, checkoutUrl };
     }
 
-    // Wechsel zwischen bezahlten Tiers (aktuell nur "pro" vorhanden, dieser
-    // Pfad greift automatisch, sobald ein weiterer bezahlter Tier dazukommt):
-    // direkt auf der bestehenden Stripe Subscription umstellen, inkl. Proration.
+    // Wechsel zwischen bezahlten Tiers (Standard <-> Pro): direkt auf der
+    // bestehenden Stripe Subscription umstellen, inkl. Proration. Auf den
+    // kleineren Tarif nur, wenn Mitarbeiter/Projekte hineinpassen.
+    await this.subscriptionsService.assertFitsTier(organizationId, dto.tier);
     if (!current.stripeSubscriptionId) {
       throw new AppBadRequestException(
         ErrorCode.SUBSCRIPTION_NO_STRIPE_SUBSCRIPTION,

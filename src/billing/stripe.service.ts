@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { SubscriptionTier } from '../organizations/enums/subscription-tier.enum';
+import { STRIPE_PRICE_ENV } from '../organizations/constants/subscription-limits.constant';
 import {
   AppInternalServerErrorException,
   ErrorCode,
@@ -28,9 +29,8 @@ export class StripeService {
   }
 
   private getPriceIdForTier(tier: SubscriptionTier): string {
-    // Nur ein bezahlter Tier (PRO) bisher - bei weiteren Tarifen hier wie in
-    // FleetTrack auf eine tier->envKey-Zuordnung umstellen.
-    const envKey = 'STRIPE_PRICE_PRO';
+    const envKey =
+      STRIPE_PRICE_ENV[tier] ?? `STRIPE_PRICE_${tier.toUpperCase()}`;
     const priceId = this.configService.get<string>(envKey);
     if (!priceId) {
       throw new AppInternalServerErrorException(
@@ -53,8 +53,10 @@ export class StripeService {
     if (!priceId) {
       return null;
     }
-    if (priceId === this.configService.get<string>('STRIPE_PRICE_PRO')) {
-      return SubscriptionTier.PRO;
+    for (const [tier, envKey] of Object.entries(STRIPE_PRICE_ENV)) {
+      if (envKey && priceId === this.configService.get<string>(envKey)) {
+        return tier as SubscriptionTier;
+      }
     }
     return null;
   }
@@ -67,7 +69,7 @@ export class StripeService {
 
   /**
    * Erstellt eine Stripe Checkout Session für ein Subscription-Upgrade.
-   * Die Organisation bleibt bis zum erfolgreichen Checkout (Webhook) auf Lieutenant.
+   * Die Organisation bleibt bis zum erfolgreichen Checkout (Webhook) auf Free.
    *
    * - automatic_tax + tax_id_collection: Stripe Tax berechnet und weist die MWST/USt
    *   automatisch aus (CH sowie ggf. weitere Länder, sobald in den Tax-Einstellungen

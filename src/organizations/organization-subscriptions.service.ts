@@ -6,7 +6,11 @@ import { OrganizationMembersService } from './organization-members.service';
 import { ProjectEntity } from '../projects/project.entity';
 import { CustomerEntity } from '../customers/customer.entity';
 import { ProjectStatus } from '../projects/project-status.enum';
-import { AppNotFoundException, ErrorCode } from '../common/exceptions';
+import {
+  AppBadRequestException,
+  AppNotFoundException,
+  ErrorCode,
+} from '../common/exceptions';
 import {
   SubscriptionTier,
   SubscriptionStatus,
@@ -16,7 +20,7 @@ import {
   SubscriptionLimits,
 } from './constants/subscription-limits.constant';
 
-export interface FreeLimitStatus {
+export interface LimitStatus {
   overLimit: boolean;
   projectCount: number;
   memberCount: number;
@@ -249,8 +253,19 @@ export class OrganizationSubscriptionsService {
    * dem Kündigen) und für downgradeToFree() (tatsächliche Durchsetzung).
    * Abgeschlossene Projekte zählen bewusst nicht mit.
    */
-  async getFreeLimitStatus(organizationId: string): Promise<FreeLimitStatus> {
-    const freeLimits = SUBSCRIPTION_LIMITS[SubscriptionTier.FREE];
+  async getFreeLimitStatus(organizationId: string): Promise<LimitStatus> {
+    return this.getLimitStatus(organizationId, SubscriptionTier.FREE);
+  }
+
+  /**
+   * Wie getFreeLimitStatus, aber gegen die Limits eines beliebigen Tarifs -
+   * z.B. vor dem Wechsel auf einen kleineren bezahlten Tarif.
+   */
+  async getLimitStatus(
+    organizationId: string,
+    tier: SubscriptionTier,
+  ): Promise<LimitStatus> {
+    const limits = SUBSCRIPTION_LIMITS[tier];
 
     const [projectCount, memberCount, customerCount] = await Promise.all([
       this.projectRepository.count({
@@ -265,12 +280,33 @@ export class OrganizationSubscriptionsService {
     ]);
 
     const overLimit =
-      (freeLimits.maxProjects !== null &&
-        projectCount > freeLimits.maxProjects) ||
-      (freeLimits.maxMembers !== null && memberCount > freeLimits.maxMembers) ||
-      (freeLimits.maxCustomers !== null &&
-        customerCount > freeLimits.maxCustomers);
+      (limits.maxProjects !== null && projectCount > limits.maxProjects) ||
+      (limits.maxMembers !== null && memberCount > limits.maxMembers) ||
+      (limits.maxCustomers !== null && customerCount > limits.maxCustomers);
 
     return { overLimit, projectCount, memberCount, customerCount };
+  }
+
+  /**
+   * Wechsel auf einen kleineren bezahlten Tarif nur, wenn die aktuelle Nutzung
+   * hineinpasst - sonst waeren z.B. 15 Mitarbeiter in einem 10er-Tarif.
+   */
+  async assertFitsTier(
+    organizationId: string,
+    tier: SubscriptionTier,
+  ): Promise<void> {
+    const status = await this.getLimitStatus(organizationId, tier);
+    if (!status.overLimit) return;
+    const limits = SUBSCRIPTION_LIMITS[tier];
+    throw new AppBadRequestException(
+      ErrorCode.SUBSCRIPTION_DOWNGRADE_OVER_LIMIT,
+      'Die Organisation hat mehr Mitarbeiter bzw. aktive Projekte, als der gewählte Tarif erlaubt',
+      {
+        members: status.memberCount,
+        maxMembers: limits.maxMembers ?? '∞',
+        projects: status.projectCount,
+        maxProjects: limits.maxProjects ?? '∞',
+      },
+    );
   }
 }
