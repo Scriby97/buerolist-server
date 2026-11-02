@@ -7,6 +7,7 @@ import {
   type TimeEntryItemType,
 } from './time-entry-item.entity';
 import { ProjectEntity } from '../projects/project.entity';
+import { ProjectStatus } from '../projects/project-status.enum';
 import { ProjectCategoryEntity } from '../project-categories/project-category.entity';
 import {
   AppBadRequestException,
@@ -398,6 +399,15 @@ export class TimeEntriesService {
         ErrorCode.PROJECT_NOT_FOUND,
         `Project with ID ${data.projectId} not found`,
         { id: data.projectId },
+      );
+    }
+    // Abgeschlossene Projekte nehmen keine neuen Zeiten mehr an (auch nicht
+    // von Admins) - wer nachbuchen muss, setzt das Projekt wieder auf aktiv.
+    // Bestehende Eintraege bleiben bearbeitbar.
+    if (project.status === ProjectStatus.COMPLETED) {
+      throw new AppBadRequestException(
+        ErrorCode.PROJECT_COMPLETED,
+        'Auf abgeschlossene Projekte kann keine Zeit mehr gebucht werden',
       );
     }
 

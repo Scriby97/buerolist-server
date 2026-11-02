@@ -97,6 +97,18 @@ describe('TimeEntriesService', () => {
       expect(repo.save).not.toHaveBeenCalled();
     });
 
+    it('rejects new time on a completed project', async () => {
+      projectRepo.findOne.mockResolvedValue({
+        id: 'project-1',
+        status: 'completed',
+      });
+
+      await expect(service.create(baseData)).rejects.toThrow(
+        AppBadRequestException,
+      );
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+
     it('rejects an entry whose endAt is not after startAt', async () => {
       projectRepo.findOne.mockResolvedValue({ id: 'project-1' });
 
