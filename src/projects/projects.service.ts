@@ -13,6 +13,7 @@ import {
   ErrorCode,
 } from '../common/exceptions';
 import { saveWithNextNumber } from '../common/utils/next-number.util';
+import { zurichDateKey } from '../common/utils/work-week.util';
 
 /** Summe Material bzw. Spesen eines Mitarbeiters auf einem Projekt. */
 export interface ProjectCostSummaryRow {
@@ -340,14 +341,17 @@ export class ProjectsService {
     const categoryIds = data.categoryIds ?? [];
     await this.assertCategoriesBelongToOrg(categoryIds, data.organizationId);
 
+    // Nummer pro Kunde und Jahr - im neuen Jahr beginnt sie wieder bei 1.
+    const year = Number(zurichDateKey(new Date()).slice(0, 4));
     const saved = await saveWithNextNumber(
-      () => this.repo.maximum('number', { customerId: data.customerId }),
+      () => this.repo.maximum('number', { customerId: data.customerId, year }),
       (number) =>
         this.repo.save(
           this.repo.create({
             title: data.title,
             customerId: data.customerId,
             organizationId: data.organizationId,
+            year,
             number,
           }),
         ),

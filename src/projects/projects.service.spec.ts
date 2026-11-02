@@ -127,16 +127,39 @@ describe('ProjectsService', () => {
       expect(projectCategoryRepo.save).not.toHaveBeenCalled();
     });
 
-    it('numbers projects per customer (highest + 1, first = 1)', async () => {
-      const first = await service.create(baseData);
-      expect(first.number).toBe(1);
+    it('numbers projects per customer and year (highest + 1, first = 1)', async () => {
+      jest.useFakeTimers({ now: new Date('2026-11-02T10:00:00Z') });
+      try {
+        const first = await service.create(baseData);
+        expect(first.number).toBe(1);
+        expect(first.year).toBe(2026);
 
-      repo.maximum.mockResolvedValueOnce(11);
-      const twelfth = await service.create(baseData);
-      expect(twelfth.number).toBe(12);
-      expect(repo.maximum).toHaveBeenLastCalledWith('number', {
-        customerId: 'customer-1',
-      });
+        repo.maximum.mockResolvedValueOnce(11);
+        const twelfth = await service.create(baseData);
+        expect(twelfth.number).toBe(12);
+        expect(repo.maximum).toHaveBeenLastCalledWith('number', {
+          customerId: 'customer-1',
+          year: 2026,
+        });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('starts again at 1 in a new year (Swiss time)', async () => {
+      // 31.12.2026 23:30 UTC ist in der Schweiz bereits 2027
+      jest.useFakeTimers({ now: new Date('2026-12-31T23:30:00Z') });
+      try {
+        const project = await service.create(baseData);
+        expect(project.year).toBe(2027);
+        expect(project.number).toBe(1);
+        expect(repo.maximum).toHaveBeenLastCalledWith('number', {
+          customerId: 'customer-1',
+          year: 2027,
+        });
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('throws AppNotFoundException when a category id does not exist', async () => {

@@ -17,7 +17,7 @@ import { ProjectStatus } from './project-status.enum';
 
 @Entity({ name: 'projects' })
 @Index('idx_projects_organization', ['organizationId'])
-@Unique('uq_projects_customer_number', ['customerId', 'number'])
+@Unique('uq_projects_customer_year_number', ['customerId', 'year', 'number'])
 export class ProjectEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -38,8 +38,12 @@ export class ProjectEntity {
   @JoinColumn({ name: 'customerId' })
   customer: CustomerEntity;
 
-  // Fortlaufende Projektnummer pro Kunde (angezeigt als "001-02" zusammen
-  // mit der Kundennummer).
+  // Jahr der Erstellung (Schweizer Zeit), z.B. 2026 - Teil der Projektnummer.
+  @Column({ type: 'smallint' })
+  year: number;
+
+  // Fortlaufende Projektnummer pro Kunde und Jahr (angezeigt als "016-26-02"
+  // zusammen mit Kundennummer und Jahr), beginnt jedes Jahr wieder bei 1.
   @Column({ type: 'integer' })
   number: number;
 

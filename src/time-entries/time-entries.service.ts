@@ -59,6 +59,7 @@ export interface TimeEntryWithProject {
     id: string;
     title: string;
     number: number;
+    year: number;
     customerId: string;
     customerName: string;
     customerNumber: number;
@@ -224,6 +225,7 @@ export class TimeEntriesService {
         id: t.project.id,
         title: t.project.title,
         number: t.project.number,
+        year: t.project.year,
         customerId: t.project.customerId,
         customerName: t.project.customer.name,
         customerNumber: t.project.customer.number,
