@@ -26,7 +26,7 @@ export const SUBSCRIPTION_LIMITS: Record<SubscriptionTier, SubscriptionLimits> =
     },
     [SubscriptionTier.PRO]: {
       maxProjects: null,
-      maxMembers: 30,
+      maxMembers: null,
       maxCustomers: null,
       priceChf: 69,
     },

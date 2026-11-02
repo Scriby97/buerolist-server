@@ -3,7 +3,7 @@
 -- Tarife nach Teamgroesse (Limits/Preise siehe SUBSCRIPTION_LIMITS im Code):
 --   free      CHF 0      2 Mitarbeiter, 10 aktive Projekte
 --   standard  CHF 29/Mt  bis 10 Mitarbeiter
---   pro       CHF 69/Mt  bis 30 Mitarbeiter
+--   pro       CHF 69/Mt  unbegrenzt
 -- Wiederholbar.
 
 ALTER TABLE public.organization_subscriptions
