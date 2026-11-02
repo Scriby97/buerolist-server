@@ -129,7 +129,7 @@ export class CustomersService {
     });
     if (projectCount > 0) {
       throw new AppBadRequestException(
-        ErrorCode.VALIDATION_BAD_REQUEST_GENERIC,
+        ErrorCode.CUSTOMER_HAS_PROJECTS,
         `Kunde hat noch ${projectCount} Projekt(e) - diese müssen zuerst gelöscht werden`,
         { projectCount },
       );
