@@ -78,6 +78,41 @@ describe('ProjectsService', () => {
     });
   });
 
+  describe('costItems', () => {
+    it('fasst gleiche Positionen zusammen und liefert Zahlen statt Strings', async () => {
+      const qb = {
+        innerJoin: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([
+          {
+            type: 'material',
+            description: 'Kitt',
+            unitPriceRappen: 1040,
+            quantity: '3.50',
+            totalRappen: '3640',
+          },
+        ]),
+      };
+      timeEntryRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await expect(service.costItems('project-1')).resolves.toEqual([
+        {
+          type: 'material',
+          description: 'Kitt',
+          unitPriceRappen: 1040,
+          quantity: 3.5,
+          totalRappen: 3640,
+        },
+      ]);
+      expect(qb.groupBy).toHaveBeenCalledWith(
+        'i.type, LOWER(TRIM(i.description)), i."unitPriceRappen"',
+      );
+    });
+  });
+
   describe('create', () => {
     const baseData = {
       title: 'Holzwerk renovieren',

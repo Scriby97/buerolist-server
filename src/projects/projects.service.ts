@@ -22,6 +22,19 @@ export interface ProjectCostSummaryRow {
   totalRappen: number;
 }
 
+/**
+ * Eine Zeile der Material-/Spesenliste eines Projekts: gleiche Positionen
+ * (Typ, Bezeichnung, Stueckpreis) ueber alle Eintraege zusammengefasst.
+ */
+export interface ProjectCostItemRow {
+  type: 'material' | 'expense';
+  description: string;
+  unitPriceRappen: number;
+  quantity: number;
+  /** Summe von Menge x Stueckpreis, in Rappen */
+  totalRappen: number;
+}
+
 /** Summe Fahrzeit eines Mitarbeiters auf einem Projekt. */
 export interface ProjectTravelSummaryRow {
   creatorId: string;
@@ -119,6 +132,7 @@ export class ProjectsService {
     notes: NoteEntity[];
     timeSummary: ProjectTimeSummaryRow[];
     costSummary: ProjectCostSummaryRow[];
+    costItems: ProjectCostItemRow[];
     travelSummary: ProjectTravelSummaryRow[];
   } | null> {
     const project = await this.repo.findOne({
@@ -129,18 +143,25 @@ export class ProjectsService {
       return null;
     }
 
-    const [categories, notes, timeSummary, costSummary, travelSummary] =
-      await Promise.all([
-        this.loadCategoriesForProject(id),
-        this.noteRepo.find({
-          where: { projectId: id },
-          relations: ['photos'],
-          order: { createdAt: 'DESC' },
-        }),
-        this.timeSummary(id),
-        this.costSummary(id),
-        this.travelSummary(id),
-      ]);
+    const [
+      categories,
+      notes,
+      timeSummary,
+      costSummary,
+      costItems,
+      travelSummary,
+    ] = await Promise.all([
+      this.loadCategoriesForProject(id),
+      this.noteRepo.find({
+        where: { projectId: id },
+        relations: ['photos'],
+        order: { createdAt: 'DESC' },
+      }),
+      this.timeSummary(id),
+      this.costSummary(id),
+      this.costItems(id),
+      this.travelSummary(id),
+    ]);
 
     return {
       project,
@@ -148,6 +169,7 @@ export class ProjectsService {
       notes,
       timeSummary,
       costSummary,
+      costItems,
       travelSummary,
     };
   }
@@ -207,6 +229,49 @@ export class ProjectsService {
     return raw.map((r) => ({
       creatorId: r.creatorId,
       totalMinutes: Math.round(Number(r.totalMinutes) || 0),
+    }));
+  }
+
+  /**
+   * Alle Material-/Spesenpositionen eines Projekts als Liste. Gleiche
+   * Positionen (Bezeichnung ohne Gross-/Kleinschreibung, gleicher Stueckpreis)
+   * werden zu einer Zeile mit summierter Menge zusammengefasst.
+   */
+  async costItems(projectId: string): Promise<ProjectCostItemRow[]> {
+    const raw = await this.timeEntryRepo
+      .createQueryBuilder('t')
+      .innerJoin('t.items', 'i')
+      .select('i.type', 'type')
+      .addSelect('MIN(TRIM(i.description))', 'description')
+      .addSelect('i."unitPriceRappen"', 'unitPriceRappen')
+      .addSelect('SUM(i.quantity)', 'quantity')
+      .addSelect(
+        'COALESCE(SUM(ROUND(i.quantity * i."unitPriceRappen")), 0)',
+        'totalRappen',
+      )
+      .where('t.projectId = :projectId', { projectId })
+      .groupBy('i.type, LOWER(TRIM(i.description)), i."unitPriceRappen"')
+      .getRawMany<{
+        type: string;
+        description: string;
+        unitPriceRappen: string | number;
+        quantity: string;
+        totalRappen: string;
+      }>();
+
+    // Material vor Spesen, innerhalb alphabetisch
+    const typeOrder = (type: string) => (type === 'expense' ? 1 : 0);
+    raw.sort(
+      (a, b) =>
+        typeOrder(a.type) - typeOrder(b.type) ||
+        a.description.localeCompare(b.description, 'de'),
+    );
+    return raw.map((r) => ({
+      type: r.type === 'expense' ? 'expense' : 'material',
+      description: r.description,
+      unitPriceRappen: Number(r.unitPriceRappen) || 0,
+      quantity: Number(r.quantity) || 0,
+      totalRappen: Math.round(Number(r.totalRappen) || 0),
     }));
   }
 
