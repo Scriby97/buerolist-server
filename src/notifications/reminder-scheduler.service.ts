@@ -32,9 +32,9 @@ export function zurichStartOfDay(now: Date = new Date()): Date {
   return new Date(utcMidnight - zurichHour * 60 * 60 * 1000);
 }
 
-/** Minuten als "H:MM" (z.B. 510 -> "8:30"). */
-export function formatHm(minutes: number): string {
-  return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
+/** Minuten als Dezimalstunden wie in der App (z.B. 510 -> "8.50"). */
+export function formatDecimalHours(minutes: number): string {
+  return (minutes / 60).toFixed(2);
 }
 
 @Injectable()
@@ -155,7 +155,7 @@ export class ReminderSchedulerService {
       title: 'Zeiten erfassen',
       body:
         recordedMinutes > 0
-          ? `Du hast heute erst ${formatHm(recordedMinutes)} von ${formatHm(workdayMinutes)} Std. erfasst.`
+          ? `Du hast heute erst ${formatDecimalHours(recordedMinutes)} von ${formatDecimalHours(workdayMinutes)} Std. erfasst.`
           : 'Vergiss nicht, deine heutigen Einträge zu erfassen.',
       url: '/',
     });

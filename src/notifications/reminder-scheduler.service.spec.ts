@@ -107,7 +107,7 @@ describe('ReminderSchedulerService.processReminder', () => {
     const payload = JSON.parse(
       (webpush.sendNotification as jest.Mock).mock.calls[0][1] as string,
     ) as { body: string };
-    expect(payload.body).toContain('3:30 von 8:45');
+    expect(payload.body).toContain('3.50 von 8.75');
   });
 
   it('zaehlt Abwesenheiten mit (z.B. ganzer Krankheitstag)', async () => {
