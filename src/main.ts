@@ -26,7 +26,12 @@ async function bootstrap() {
 
   const corsOrigins = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
-    : ['http://localhost:3000', 'https://buerolist-app.vercel.app'];
+    : [
+        'http://localhost:3000',
+        'https://buerolistapp.ch',
+        'https://www.buerolistapp.ch',
+        'https://buerolist-app.vercel.app',
+      ];
 
   app.enableCors({
     origin: corsOrigins,
