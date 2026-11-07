@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UpdateWorkScheduleDto } from './dto/update-work-schedule.dto';
+import { UpdateNameDto } from './dto/update-name.dto';
 import {
   SignInDto,
   SignUpDto,
@@ -105,6 +106,15 @@ export class AuthController {
     @Body() dto: UpdateWorkScheduleDto,
   ) {
     return this.authService.updateWorkSchedule(user.id, dto);
+  }
+
+  /**
+   * PUT /auth/me/name
+   * Eigenen Vor- und Nachnamen ändern.
+   */
+  @Put('me/name')
+  updateName(@CurrentUser() user: AuthUser, @Body() dto: UpdateNameDto) {
+    return this.authService.updateName(user.id, dto);
   }
 
   /**

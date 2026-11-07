@@ -355,6 +355,18 @@ export class AuthService {
    * sehen, deren Mitgliedschaft archiviert wurde (z.B. nach einem
    * Owner-Self-Delete, siehe OrganizationsService.deleteByOwner).
    */
+  /** Eigenen Vor- und Nachnamen speichern (bereits getrimmt, siehe UpdateNameDto). */
+  async updateName(
+    userId: string,
+    dto: { firstName: string; lastName: string },
+  ) {
+    await this.profileRepo.update(
+      { id: userId },
+      { firstName: dto.firstName, lastName: dto.lastName },
+    );
+    return this.getUserProfile(userId);
+  }
+
   /** Normaler Arbeitstag des eingeloggten Users speichern. */
   async updateWorkSchedule(userId: string, dto: UpdateWorkScheduleDto) {
     if (!isValidWorkSchedule(dto)) {

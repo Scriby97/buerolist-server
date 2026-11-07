@@ -11,6 +11,7 @@ describe('AuthService', () => {
 
   const profileRepo = {
     findOne: jest.fn(),
+    update: jest.fn(),
   };
 
   const memberRepo = {
@@ -36,6 +37,29 @@ describe('AuthService', () => {
     }).compile();
 
     service = module.get<AuthService>(AuthService);
+  });
+
+  describe('updateName', () => {
+    it('speichert Vor- und Nachnamen und liefert das aktualisierte Profil', async () => {
+      const profile = {
+        id: 'user-1',
+        firstName: 'Martin',
+        lastName: 'Germann',
+      };
+      profileRepo.findOne.mockResolvedValue(profile);
+      memberRepo.find.mockResolvedValue([]);
+
+      await expect(
+        service.updateName('user-1', {
+          firstName: 'Martin',
+          lastName: 'Germann',
+        }),
+      ).resolves.toMatchObject({ firstName: 'Martin', lastName: 'Germann' });
+      expect(profileRepo.update).toHaveBeenCalledWith(
+        { id: 'user-1' },
+        { firstName: 'Martin', lastName: 'Germann' },
+      );
+    });
   });
 
   describe('getUserProfile', () => {
