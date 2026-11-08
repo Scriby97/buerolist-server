@@ -11,6 +11,7 @@ import {
   AppNotFoundException,
   ErrorCode,
 } from '../common/exceptions';
+import { deletePlaceholderIfUnused } from '../common/utils/placeholder-cleanup.util';
 
 @Injectable()
 export class OrganizationMembersService {
@@ -299,6 +300,14 @@ export class OrganizationMembersService {
     }
 
     await this.memberRepository.remove(member);
+
+    // Platzhalter ohne Eintraege nicht als Leiche zuruecklassen
+    if (member.user?.isPlaceholder) {
+      await deletePlaceholderIfUnused(
+        this.memberRepository.manager,
+        member.userId,
+      );
+    }
   }
 
   /**

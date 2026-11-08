@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   Post,
   Body,
   Get,
@@ -138,6 +139,16 @@ export class AuthController {
     @Body() dto: UpdateUserRoleDto,
   ) {
     return this.authService.updateUserRole(userId, dto.role);
+  }
+
+  /**
+   * DELETE /auth/users/:userId
+   * Admin: ungenutzten Mitarbeiter ohne Login (Platzhalter) loeschen
+   */
+  @Roles(UserRole.ADMINISTRATOR)
+  @Delete('users/:userId')
+  deleteUnusedPlaceholder(@Param('userId') userId: string) {
+    return this.authService.deleteUnusedPlaceholder(userId);
   }
 
   /**

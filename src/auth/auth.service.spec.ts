@@ -5,13 +5,21 @@ import { AuthService } from './auth.service';
 import { UserProfileEntity } from './entities/user-profile.entity';
 import { OrganizationMemberEntity } from '../organizations/organization-member.entity';
 import { SupabaseService } from '../supabase/supabase.service';
+import { AppBadRequestException } from '../common/exceptions';
 
 describe('AuthService', () => {
   let service: AuthService;
 
+  const manager = {
+    findOne: jest.fn(),
+    count: jest.fn(),
+    delete: jest.fn(),
+  };
+
   const profileRepo = {
     findOne: jest.fn(),
     update: jest.fn(),
+    manager,
   };
 
   const memberRepo = {
@@ -37,6 +45,44 @@ describe('AuthService', () => {
     }).compile();
 
     service = module.get<AuthService>(AuthService);
+  });
+
+  describe('deleteUnusedPlaceholder', () => {
+    it('loescht einen Platzhalter ohne Organisation und ohne Eintraege', async () => {
+      profileRepo.findOne.mockResolvedValue({ id: 'ph', isPlaceholder: true });
+      manager.findOne.mockResolvedValue({ id: 'ph', isPlaceholder: true });
+      manager.count.mockResolvedValue(0);
+
+      await expect(service.deleteUnusedPlaceholder('ph')).resolves.toEqual({
+        deleted: true,
+      });
+      expect(manager.delete).toHaveBeenCalledWith(UserProfileEntity, {
+        id: 'ph',
+      });
+    });
+
+    it('verweigert das Loeschen, wenn noch Zeiteintraege daran haengen', async () => {
+      profileRepo.findOne.mockResolvedValue({ id: 'ph', isPlaceholder: true });
+      manager.findOne.mockResolvedValue({ id: 'ph', isPlaceholder: true });
+      manager.count
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(2)
+        .mockResolvedValueOnce(0);
+
+      await expect(service.deleteUnusedPlaceholder('ph')).rejects.toThrow(
+        AppBadRequestException,
+      );
+      expect(manager.delete).not.toHaveBeenCalled();
+    });
+
+    it('loescht keine echten Konten mit Login', async () => {
+      profileRepo.findOne.mockResolvedValue({ id: 'u', isPlaceholder: false });
+
+      await expect(service.deleteUnusedPlaceholder('u')).rejects.toThrow(
+        AppBadRequestException,
+      );
+      expect(manager.delete).not.toHaveBeenCalled();
+    });
   });
 
   describe('updateName', () => {

@@ -10,9 +10,11 @@ import { isValidWorkSchedule } from '../common/utils/work-schedule.util';
 import {
   AppBadRequestException,
   AppForbiddenException,
+  AppNotFoundException,
   AppUnauthorizedException,
   ErrorCode,
 } from '../common/exceptions';
+import { deletePlaceholderIfUnused } from '../common/utils/placeholder-cleanup.util';
 
 @Injectable()
 export class AuthService {
@@ -355,6 +357,37 @@ export class AuthService {
    * sehen, deren Mitgliedschaft archiviert wurde (z.B. nach einem
    * Owner-Self-Delete, siehe OrganizationsService.deleteByOwner).
    */
+  /**
+   * Admin: einen Mitarbeiter ohne Login (Platzhalter) loeschen, der keiner
+   * Organisation mehr angehoert und keine Zeiten/Abwesenheiten hat.
+   */
+  async deleteUnusedPlaceholder(userId: string) {
+    const profile = await this.profileRepo.findOne({ where: { id: userId } });
+    if (!profile) {
+      throw new AppNotFoundException(
+        ErrorCode.AUTH_USER_NOT_FOUND,
+        'User nicht gefunden',
+      );
+    }
+    if (!profile.isPlaceholder) {
+      throw new AppBadRequestException(
+        ErrorCode.USER_NOT_PLACEHOLDER,
+        'Nur Mitarbeiter ohne Login koennen hier geloescht werden',
+      );
+    }
+    const deleted = await deletePlaceholderIfUnused(
+      this.profileRepo.manager,
+      userId,
+    );
+    if (!deleted) {
+      throw new AppBadRequestException(
+        ErrorCode.PLACEHOLDER_IN_USE,
+        'Mitarbeiter gehoert noch einer Organisation an oder hat Zeiten/Abwesenheiten',
+      );
+    }
+    return { deleted: true };
+  }
+
   /** Eigenen Vor- und Nachnamen speichern (bereits getrimmt, siehe UpdateNameDto). */
   async updateName(
     userId: string,

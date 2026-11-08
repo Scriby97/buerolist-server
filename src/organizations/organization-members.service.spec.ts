@@ -29,6 +29,9 @@ describe('OrganizationMembersService', () => {
       transaction: jest.fn((cb) =>
         cb({ getRepository: () => transactionRepo }),
       ),
+      findOne: jest.fn(),
+      count: jest.fn().mockResolvedValue(0),
+      delete: jest.fn(),
     },
   };
 
@@ -73,6 +76,45 @@ describe('OrganizationMembersService', () => {
         id: 'member-1',
         role: OrganizationRole.EMPLOYEE,
       });
+    });
+
+    it('deletes a removed placeholder that has no entries', async () => {
+      const member = {
+        id: 'member-1',
+        userId: 'ph-1',
+        role: OrganizationRole.EMPLOYEE,
+        user: { isPlaceholder: true },
+      };
+      memberRepository.findOne.mockResolvedValue(member);
+      memberRepository.manager.findOne.mockResolvedValue({ id: 'ph-1' });
+      memberRepository.manager.count.mockResolvedValue(0);
+
+      await service.remove('org-1', 'member-1');
+
+      expect(memberRepository.remove).toHaveBeenCalledWith(member);
+      expect(memberRepository.manager.delete).toHaveBeenCalledWith(
+        expect.anything(),
+        { id: 'ph-1' },
+      );
+    });
+
+    it('keeps a removed placeholder that still has time entries', async () => {
+      memberRepository.findOne.mockResolvedValue({
+        id: 'member-1',
+        userId: 'ph-1',
+        role: OrganizationRole.EMPLOYEE,
+        user: { isPlaceholder: true },
+      });
+      memberRepository.manager.findOne.mockResolvedValue({ id: 'ph-1' });
+      // Mitgliedschaften 0, Zeiteintraege 3, Abwesenheiten 0
+      memberRepository.manager.count
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(3)
+        .mockResolvedValueOnce(0);
+
+      await service.remove('org-1', 'member-1');
+
+      expect(memberRepository.manager.delete).not.toHaveBeenCalled();
     });
 
     it('refuses to remove the last owner', async () => {
